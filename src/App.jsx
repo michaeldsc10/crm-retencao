@@ -247,7 +247,7 @@ export default function App() {
       if (user) {
         const snap = await getDoc(doc(db, "licencas", user.uid));
         if (snap.exists() && snap.data().clienteCRM) {
-          setUsuario({ uid: user.uid, email: user.email, empresaId: snap.data().empresaId });
+          setUsuario({ uid: user.uid, email: user.email, empresaId: user.uid });
         } else {
           await signOut(auth);
           setUsuario(null);
