@@ -27,8 +27,7 @@ export default function Login({ onLogin }) {
      
 
       const snap = await getDoc(ref);
-console.log("snap exists:", snap.exists());
-console.log("dados:", snap.data());
+
 
       if (!snap.exists()) {
         // Cria o documento se não existir (primeiro login)
