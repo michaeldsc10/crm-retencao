@@ -3,9 +3,7 @@ import { doc, onSnapshot } from "firebase/firestore";
 import { db } from "./firebase";
 
 // ─── Score de churn ───────────────────────────────────────────────────────────
-export function useCRM(empresaId) {
-  console.log("useCRM recebeu empresaId:", empresaId); // ← adiciona essa linha
-  const [estado, setEstado] = useState({
+
 function calcularScoreChurn(clientes = [], vendas = []) {
   const hoje = new Date();
 
