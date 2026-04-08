@@ -245,7 +245,7 @@ export default function App() {
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (user) => {
       if (user) {
-        const snap = await getDoc(doc(db, "usuarios", user.uid));
+        const snap = await getDoc(doc(db, "licencas", user.uid));
         if (snap.exists() && snap.data().clienteCRM) {
           setUsuario({ uid: user.uid, email: user.email, empresaId: snap.data().empresaId });
         } else {
