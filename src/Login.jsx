@@ -52,7 +52,7 @@ console.log("dados:", snap.data());
       }
 
       // Acesso liberado — passa o empresaId para o App
-      onLogin({ uid, empresaId: dados.empresaId || null, email: cred.user.email });
+      onLogin({ uid, empresaId: uid, email: cred.user.email });
     } catch (err) {
       const mensagens = {
         "auth/user-not-found": "Usuário não encontrado.",
