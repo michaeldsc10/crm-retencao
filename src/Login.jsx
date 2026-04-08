@@ -26,6 +26,10 @@ export default function Login({ onLogin }) {
       const ref = doc(db, "usuarios", uid);
       const snap = await getDoc(ref);
 
+      const snap = await getDoc(ref);
+console.log("snap exists:", snap.exists());
+console.log("dados:", snap.data());
+
       if (!snap.exists()) {
         // Cria o documento se não existir (primeiro login)
         await setDoc(ref, {
