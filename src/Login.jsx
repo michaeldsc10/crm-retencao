@@ -24,7 +24,7 @@ export default function Login({ onLogin }) {
 
       // Busca o documento do usuário no Firestore
       const ref = doc(db, "usuarios", uid);
-      const snap = await getDoc(ref);
+     
 
       const snap = await getDoc(ref);
 console.log("snap exists:", snap.exists());
