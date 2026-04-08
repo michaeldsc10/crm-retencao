@@ -23,7 +23,7 @@ export default function Login({ onLogin }) {
       const uid = cred.user.uid;
 
       // Busca o documento do usuário no Firestore
-      const ref = doc(db, "usuarios", uid);
+      const ref = doc(db, "licencas", uid);
      
 
       const snap = await getDoc(ref);
