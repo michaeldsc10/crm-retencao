@@ -804,22 +804,57 @@ const clientesFiltrados = clientes.filter((c) => {
 
           {/* ── Clientes ── */}
           {aba === "clientes" && (
-            <>
-              <div style={{
-                display: "grid",
-                gridTemplateColumns: bp.isMobile ? "1fr" : "repeat(3, 1fr)",
-                gap: 10, marginBottom: 18,
-              }}>
-                <MetricCard T={T} val={clientes.filter(c => c.risco === "alto").length}  label="Risco alto" color={T.red} />
-                <MetricCard T={T} val={clientes.filter(c => c.risco === "medio").length} label="Atenção"    color={T.yellow} />
-                <MetricCard T={T} val={clientes.filter(c => c.risco === "baixo").length} label="Fiéis"      color={T.green} />
-              </div>
-              {bp.isMobile
-                ? <CardsClientes clientes={clientes} T={T} />
-                : <TabelaClientes clientes={clientes} T={T} />
-              }
-            </>
-          )}
+  <>
+    {/* ─── BARRA DE BUSCA (Nova Seção) ─── */}
+    <div style={{ marginBottom: 20 }}>
+      <input
+        type="text"
+        placeholder="Buscar por nome ou telefone..."
+        value={busca}
+        onChange={(e) => setBusca(e.target.value)}
+        style={{
+          width: "100%",
+          padding: "12px 16px",
+          borderRadius: 10,
+          border: `1px solid ${T.border}`, // Usa a borda do seu tema (Dark/Light)
+          background: T.surface,          // Usa o fundo do seu tema
+          color: T.text,                  // Usa a cor de texto do seu tema
+          fontSize: 14,
+          outline: "none",
+          transition: "border-color 0.2s",
+        }}
+        // Um pequeno efeito visual ao focar no campo
+        onFocus={(e) => (e.target.style.borderColor = T.gold)}
+        onBlur={(e) => (e.target.style.borderColor = T.border)}
+      />
+    </div>
+
+    {/* ─── CARDS DE MÉTRICA (Atualizados para mostrar os números da busca) ─── */}
+    <div style={{
+      display: "grid",
+      gridTemplateColumns: bp.isMobile ? "1fr" : "repeat(3, 1fr)",
+      gap: 10, marginBottom: 18,
+    }}>
+      {/* Agora usamos 'clientesFiltrados' para que os números mudem enquanto você digita */}
+      <MetricCard T={T} val={clientesFiltrados.filter(c => c.risco === "alto").length}  label="Risco alto" color={T.red} />
+      <MetricCard T={T} val={clientesFiltrados.filter(c => c.risco === "medio").length} label="Atenção"    color={T.yellow} />
+      <MetricCard T={T} val={clientesFiltrados.filter(c => c.risco === "baixo").length} label="Fiéis"      color={T.green} />
+    </div>
+
+    {/* ─── LISTAGEM (Atualizada para mostrar apenas os filtrados) ─── */}
+    {bp.isMobile
+      ? <CardsClientes clientes={clientesFiltrados} T={T} />
+      : <TabelaClientes clientes={clientesFiltrados} T={T} />
+    }
+    
+    {/* Mensagem caso não encontre ninguém */}
+    {clientesFiltrados.length === 0 && (
+      <div style={{ textAlign: "center", padding: "40px", color: T.textDim }}>
+        Nenhum cliente encontrado com "{busca}".
+      </div>
+    )}
+  </>
+)}
 
           {/* ── IA ── */}
           {aba === "ia" && (
