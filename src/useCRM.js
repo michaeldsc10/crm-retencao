@@ -137,7 +137,8 @@ function calcularMetricas(clientesComScore, vendas = []) {
 
   return {
     totalClientes: com.length,
-    emRisco: com.filter((c) => c.risco === "alto").length,
+    // Alterado para somar os dois níveis que aparecem no Radar
+    emRisco: com.filter((c) => c.risco === "alto" || c.risco === "medio").length, 
     dormentes: com.filter((c) => c.diasAusente > 60).length,
     fieis: com.filter((c) => c.risco === "baixo" && c.totalCompras >= 2).length,
     novos: com.filter((c) => c.totalCompras === 1).length,
