@@ -364,7 +364,7 @@ Regras:
 }
 
 // ─── Tabela de Clientes (Desktop) ─────────────────────────────────────────────
-function TabelaClientes({ clientes, T }) {
+function TabelaClientes({ clientes, T, onSelecionar }) {
   const sorted = [...clientes].sort(
     (a, b) =>
       ({ alto: 0, medio: 1, baixo: 2, indefinido: 3 }[a.risco] || 3) -
@@ -372,7 +372,8 @@ function TabelaClientes({ clientes, T }) {
   );
 <td 
   style={{ padding: "12px 14px", cursor: "pointer" }} 
-  onClick={() => setClienteAtivo(c)} // 'c' é o objeto do cliente no map
+  onClick={() => setClienteAtivo(c)}// 'c' é o objeto do cliente no map
+  onClick={() => onSelecionar(c)}
 >
   <div style={{ fontWeight: 600, color: T.text, textDecoration: "underline" }}>{c.nome}</div>
   <div style={{ fontSize: 10, color: T.textDim, marginTop: 2 }}>{c.telefone || "—"}</div>
@@ -418,7 +419,7 @@ function TabelaClientes({ clientes, T }) {
 }
 
 // ─── Cards de Clientes (Mobile) ───────────────────────────────────────────────
-function CardsClientes({ clientes, T }) {
+function CardsClientes({ clientes, T, onSelecionar }) { 
   const sorted = [...clientes].sort(
     (a, b) =>
       ({ alto: 0, medio: 1, baixo: 2, indefinido: 3 }[a.risco] || 3) -
@@ -428,7 +429,9 @@ function CardsClientes({ clientes, T }) {
   return (
     <div>
       {sorted.map((c) => (
-        <div key={c.nome} style={{
+        <div key={c.nome}
+          onClick={() => onSelecionar(c)}
+          style={{
           background: T.surface, border: `1px solid ${T.border}`,
           borderRadius: 10, padding: "14px 14px", marginBottom: 8,
         }}>
@@ -927,10 +930,11 @@ const clientesFiltrados = clientes.filter((c) => {
     </div>
 
     {/* ─── LISTAGEM (Atualizada para mostrar apenas os filtrados) ─── */}
-    {bp.isMobile
-      ? <CardsClientes clientes={clientesFiltrados} T={T} />
-      : <TabelaClientes clientes={clientesFiltrados} T={T} />
-    }
+    {bp.isMobile ? (
+  <CardsClientes clientes={clientesFiltrados} T={T} onSelecionar={setClienteAtivo} />
+) : (
+  <TabelaClientes clientes={clientesFiltrados} T={T} onSelecionar={setClienteAtivo} />
+)}
     
     {/* Mensagem caso não encontre ninguém */}
     {clientesFiltrados.length === 0 && (
