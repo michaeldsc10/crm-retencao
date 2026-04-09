@@ -15,7 +15,7 @@ function formatarReal(valor) {
 
 async function chamarIA(system, user) {
   const r = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${import.meta.env.VITE_GEMINI_KEY}`,
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-04-17:generateContent?key=${import.meta.env.VITE_GEMINI_KEY}`,
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
