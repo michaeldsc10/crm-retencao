@@ -205,39 +205,24 @@ export function useCRM(empresaId) {
 // ─── Gerador de prompt para IA ────────────────────────────────────────────────
 
 export function montarPromptMensagem(insight, empresaNome) {
-  const empresa = empresaNome || "a empresa";
-
-  const system = `Você é um especialista em retenção de clientes para pequenos negócios brasileiros, trabalhando para "${empresa}". 
-
-Sua tarefa é criar mensagens de WhatsApp altamente personalizadas e eficazes.
-
-Regras obrigatórias:
-- Use o nome do cliente de forma natural, apenas uma vez no início
-- Mencione especificamente o serviço/produto que ele usa
-- Crie senso de valor real, não urgência artificial
-- Tom: caloroso, próximo, humano — como um amigo que trabalha no negócio
-- Máximo 4 linhas curtas, ideal para leitura no celular
-- NUNCA mencione sistemas, IA, dados ou análises
-- NUNCA use frases genéricas como "sentimos sua falta" ou "temos novidades"
-- A mensagem deve parecer escrita manualmente por um atendente que conhece o cliente`;
+  const empresa = empresaNome || "nossa agência";
+  
+  const system = `Você é um gestor de relacionamento da "${empresa}". 
+  Sua missão é escrever uma mensagem de WhatsApp extremamente humana e curta (máximo 3 linhas).
+  REGRAS:
+  - Use um tom de "parceria", não de "vendedor".
+  - Nunca use "espero que esteja bem" ou "notamos que você sumiu".
+  - Se houver um produto favorito, mencione algo sobre o valor dele.
+  - Termine com uma pergunta aberta.
+  - Saída: Apenas o texto da mensagem.`;
 
   let user = "";
-
   if (insight.tipo === "risco") {
-    user = `Cliente: ${insight.cliente}
-Ausente há: ${insight.diasAusente} dias
-Frequência normal de retorno: ${insight.frequenciaMedia ? `${insight.frequenciaMedia} dias` : "não calculada"}
-Último serviço/produto: ${insight.produtoFavorito || "não identificado"}
-Ticket médio: R$ ${insight.ticketMedio || "não calculado"}
-
-Crie uma mensagem de reativação natural para WhatsApp. Mencione o serviço específico que ele usa. Não seja genérico.`;
+    user = `Cliente: ${insight.cliente}. Serviço: ${insight.produtoFavorito || "nossos serviços"}. Ausente há ${insight.diasAusente} dias. 
+    Escreva um oi rápido, dizendo que lembrou dele ao organizar a agenda e pergunte como estão os planos dessa semana.`;
   } else if (insight.tipo === "oportunidade") {
-    user = `Cliente: ${insight.cliente}
-Serviço que sempre contrata: categoria ${insight.servico}
-Novo serviço para apresentar: "${insight.servico}" por R$ ${insight.preco}
-Ticket médio atual: R$ ${insight.ticketMedio}
-
-Crie uma mensagem apresentando o novo serviço de forma natural, como uma sugestão personalizada baseada no que ele já contrata.`;
+    user = `Cliente: ${insight.cliente}. Já faz ${insight.produtoFavorito}, mas nunca usou "${insight.servico}". 
+    Sugira esse novo serviço como algo que pode escalar os resultados que ele já tem.`;
   }
 
   return { system, user };
