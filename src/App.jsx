@@ -14,14 +14,21 @@ function formatarReal(valor) {
 }
 
 async function chamarIA(system, user) {
-  const r = await fetch("/api/ia", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ system, user }),
-  });
+  const r = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${import.meta.env.VITE_GEMINI_KEY}`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        system_instruction: { parts: [{ text: system }] },
+        contents: [{ role: "user", parts: [{ text: user }] }],
+        generationConfig: { maxOutputTokens: 500, temperature: 0.7 },
+      }),
+    }
+  );
   const d = await r.json();
-  if (!r.ok) throw new Error(d.error || "Erro na IA");
-  return d.texto;
+  if (!r.ok) throw new Error(d.error?.message || "Erro na IA");
+  return d.candidates?.[0]?.content?.parts?.[0]?.text || "";
 }
 
 function RiscoBadge({ risco }) {
