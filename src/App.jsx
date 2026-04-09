@@ -22,7 +22,7 @@ async function chamarIA(system, user) {
       body: JSON.stringify({
         system_instruction: { parts: [{ text: system }] },
         contents: [{ role: "user", parts: [{ text: user }] }],
-        generationConfig: { maxOutputTokens: 500, temperature: 0.7 },
+        generationConfig: { maxOutputTokens: 1500, temperature: 0.9 },
       }),
     }
   );
@@ -237,7 +237,7 @@ Regras:
           <p style={{ fontSize: 10, fontWeight: 600, color: "#185FA5", letterSpacing: "0.08em", marginBottom: 10 }}>✦ ASSISTENTE IA</p>
           {pensando
             ? <p style={{ fontSize: 13, color: "#aaa" }}>Analisando dados...</p>
-            : <p style={{ fontSize: 13, lineHeight: 1.7, whiteSpace: "pre-wrap" }}>{resposta}</p>
+            : <p style={{ fontSize: 13, lineHeight: 1.7, whiteSpace: "pre-wrap", wordBreak: "break-word", overflowWrap: "break-word" }}>{resposta}</p>
           }
         </div>
       )}
