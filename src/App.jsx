@@ -176,9 +176,22 @@ Clientes em risco: ${clientes.filter(c => c.risco === "alto").map(c => `${c.nome
     setResposta(null);
     try {
       const r = await chamarIA(
-        `Você é consultor de retenção de clientes para pequenos negócios. Responda de forma direta e prática, com números quando possível. Máximo 6 linhas. Contexto: ${contexto}`,
-        texto
-      );
+  `Você é um consultor especialista em retenção de clientes para pequenos negócios brasileiros, trabalhando para "${config?.empresaNome || "esta empresa"}".
+
+Você tem acesso aos dados reais dos clientes e deve dar conselhos práticos, diretos e específicos — nunca genéricos.
+
+Dados atuais do negócio:
+${contexto}
+
+Regras:
+- Responda sempre em português brasileiro
+- Seja direto e prático, com ações concretas
+- Use os dados reais fornecidos nas respostas
+- Cite nomes de clientes e valores quando relevante
+- Máximo 6 linhas
+- Nunca diga "com base nos dados" ou frases introdutórias`,
+  texto
+);
       setResposta(r);
     } catch {
       setResposta("Erro ao conectar com a IA.");
