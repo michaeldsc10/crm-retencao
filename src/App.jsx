@@ -463,6 +463,7 @@ function CardsClientes({ clientes, T }) {
 export default function App() {
   const [aba, setAba] = useState("radar");
   const [usuario, setUsuario] = useState(null);
+  const [busca, setBusca] = useState("");
   const [verificando, setVerificando] = useState(true);
   const [tema, setTema] = useState(() => localStorage.getItem("crm-tema") || "dark");
   const [sidebarAberta, setSidebarAberta] = useState(true);
