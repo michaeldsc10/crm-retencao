@@ -502,7 +502,16 @@ export default function App() {
   }, []);
 
   const { clientes, insights, metricas, config } = useCRM(usuario?.empresaId);
+// Criamos uma nova lista baseada no que o usuário digita na busca
+const clientesFiltrados = clientes.filter((c) => {
+  const nomeLimpo = (c.nome || "").toLowerCase();
+  const buscaLimpa = busca.toLowerCase();
+  const telefoneLimpo = (c.telefone || "");
 
+  // Retorna verdadeiro se o nome ou o telefone contiverem o que foi digitado
+  return nomeLimpo.includes(buscaLimpa) || telefoneLimpo.includes(buscaLimpa);
+});
+  
   if (verificando) return (
     <div style={{
       display: "flex", alignItems: "center", justifyContent: "center",
