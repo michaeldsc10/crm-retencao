@@ -372,11 +372,14 @@ function TabelaClientes({ clientes, T, onSelecionar }) {
   );
 <td 
   style={{ padding: "12px 14px", cursor: "pointer" }} 
-  onClick={() => setClienteAtivo(c)}// 'c' é o objeto do cliente no map
   onClick={() => onSelecionar(c)}
 >
-  <div style={{ fontWeight: 600, color: T.text, textDecoration: "underline" }}>{c.nome}</div>
-  <div style={{ fontSize: 10, color: T.textDim, marginTop: 2 }}>{c.telefone || "—"}</div>
+  <div style={{ fontWeight: 600, color: T.text, textDecoration: "underline" }}>
+    {c.nome}
+  </div>
+  <div style={{ fontSize: 10, color: T.textDim, marginTop: 2 }}>
+    {c.telefone || "—"}
+  </div>
 </td>
   return (
     <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 10, overflow: "hidden" }}>
@@ -555,6 +558,7 @@ export default function App() {
   const [verificando, setVerificando] = useState(true);
   const [tema, setTema] = useState(() => localStorage.getItem("crm-tema") || "dark");
   const [sidebarAberta, setSidebarAberta] = useState(true);
+  const [clienteAtivo, setClienteAtivo] = useState(null);
 
   const T = TEMAS[tema];
   const bp = useBreakpoint();
@@ -1004,7 +1008,7 @@ const clientesFiltrados = clientes.filter((c) => {
                       <span style={{ fontSize: 12, color: T.textMid }}>{s.label}</span>
                       <span style={{ fontSize: 13, fontWeight: 700, color: s.color }}>{s.val}</span>
                     </div>
-                        const [clienteAtivo, setClienteAtivo] = useState(null);
+                        
                   ))}
                 </div>
               </div>
