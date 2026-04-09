@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { onAuthStateChanged, signOut } from "firebase/auth";
-import { doc, getDoc } from "firebase/firestore";
+import { doc, getDoc, collection, addDoc, serverTimestamp } from "firebase/firestore";
 import { auth, db } from "./firebase";
 import Login from "./Login";
 import { useCRM, montarPromptMensagem } from "./useCRM";
@@ -1609,20 +1609,69 @@ export default function App() {
           vendas={dadosBrutos?.vendas || []}
           T={T}
           onClose={() => setClienteAtivo(null)}
+          empresaId={usuario?.empresaId}
         />
       )}
     </div>
   );
 }
 // ─── Modal Histórico CRM ──────────────────────────────────────────────────────
-function ModalHistoricoCRM({ cliente, vendas, T, onClose }) {
+const CANAIS_CONTATO = ["WhatsApp", "Instagram", "Telefone", "E-mail", "Presencial", "Outro"];
+
+function ModalHistoricoCRM({ cliente, vendas, T, onClose, empresaId }) {
   if (!cliente) return null;
+
+  const [mostrarFormContato, setMostrarFormContato] = useState(false);
+  const [salvando, setSalvando] = useState(false);
+  const [sucesso, setSucesso] = useState(false);
+  const [formContato, setFormContato] = useState({
+    data: new Date().toISOString().slice(0, 10),
+    canal: "WhatsApp",
+    observacao: "",
+  });
 
   const historico = vendas
     .filter((v) => v.cliente === cliente.nome)
     .sort((a, b) => new Date(b.data) - new Date(a.data));
 
   const faturamentoTotal = historico.reduce((acc, v) => acc + (v.total || 0), 0);
+
+  async function salvarContato() {
+    if (!formContato.observacao.trim()) return;
+    setSalvando(true);
+    try {
+      await addDoc(collection(db, "empresas", empresaId, "historico_contatos"), {
+        clienteNome: cliente.nome,
+        data: formContato.data,
+        canal: formContato.canal,
+        observacao: formContato.observacao.trim(),
+        criadoEm: serverTimestamp(),
+      });
+      setSucesso(true);
+      setFormContato({ data: new Date().toISOString().slice(0, 10), canal: "WhatsApp", observacao: "" });
+      setTimeout(() => {
+        setSucesso(false);
+        setMostrarFormContato(false);
+      }, 2000);
+    } catch (err) {
+      console.error("Erro ao salvar contato:", err);
+    } finally {
+      setSalvando(false);
+    }
+  }
+
+  const inputStyle = {
+    width: "100%",
+    padding: "10px 12px",
+    borderRadius: "8px",
+    fontSize: "13px",
+    border: `1px solid ${T.borderAlt}`,
+    background: T.surfaceAlt,
+    color: T.text,
+    fontFamily: "inherit",
+    outline: "none",
+    boxSizing: "border-box",
+  };
 
   return (
     <div
@@ -1652,23 +1701,8 @@ function ModalHistoricoCRM({ cliente, vendas, T, onClose }) {
         }}
       >
         {/* Header */}
-        <div
-          style={{
-            padding: "24px",
-            borderBottom: `1px solid ${T.border}`,
-            position: "relative",
-          }}
-        >
-          <div
-            style={{
-              fontSize: "10px",
-              color: T.gold,
-              fontWeight: "800",
-              textTransform: "uppercase",
-              letterSpacing: "2px",
-              marginBottom: "4px",
-            }}
-          >
+        <div style={{ padding: "24px", borderBottom: `1px solid ${T.border}`, position: "relative" }}>
+          <div style={{ fontSize: "10px", color: T.gold, fontWeight: "800", textTransform: "uppercase", letterSpacing: "2px", marginBottom: "4px" }}>
             Ficha do Cliente
           </div>
           <h2 style={{ margin: 0, fontSize: "22px", color: T.text, letterSpacing: "-0.5px" }}>
@@ -1682,56 +1716,21 @@ function ModalHistoricoCRM({ cliente, vendas, T, onClose }) {
               Serviços: <b>{historico.length}</b>
             </span>
           </div>
-          <button
-            onClick={onClose}
-            style={{
-              position: "absolute",
-              top: "24px",
-              right: "24px",
-              background: "none",
-              border: "none",
-              color: T.textDim,
-              cursor: "pointer",
-              fontSize: "20px",
-            }}
-          >
+          <button onClick={onClose} style={{ position: "absolute", top: "24px", right: "24px", background: "none", border: "none", color: T.textDim, cursor: "pointer", fontSize: "20px" }}>
             ✕
           </button>
         </div>
 
-        {/* Lista de Vendas */}
+        {/* Conteúdo scrollável */}
         <div style={{ padding: "24px", overflowY: "auto", flex: 1 }}>
-          <div
-            style={{
-              fontSize: "11px",
-              fontWeight: "700",
-              color: T.textDim,
-              textTransform: "uppercase",
-              marginBottom: "16px",
-              letterSpacing: "1px",
-            }}
-          >
+          {/* Histórico de Vendas */}
+          <div style={{ fontSize: "11px", fontWeight: "700", color: T.textDim, textTransform: "uppercase", marginBottom: "16px", letterSpacing: "1px" }}>
             Histórico de Vendas (via Assent Gestão)
           </div>
 
           {historico.map((v, i) => (
-            <div
-              key={i}
-              style={{
-                padding: "16px",
-                background: T.surfaceAlt,
-                borderRadius: "10px",
-                marginBottom: "12px",
-                border: `1px solid ${T.borderAlt}`,
-              }}
-            >
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  marginBottom: "8px",
-                }}
-              >
+            <div key={i} style={{ padding: "16px", background: T.surfaceAlt, borderRadius: "10px", marginBottom: "12px", border: `1px solid ${T.borderAlt}` }}>
+              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "8px" }}>
                 <span style={{ fontSize: "11px", color: T.textDim }}>
                   {new Date(v.data).toLocaleDateString("pt-BR")}
                 </span>
@@ -1746,39 +1745,129 @@ function ModalHistoricoCRM({ cliente, vendas, T, onClose }) {
           ))}
 
           {historico.length === 0 && (
-            <div
-              style={{
-                textAlign: "center",
-                padding: "40px",
-                color: T.textDim,
-                border: `1px dashed ${T.border}`,
-                borderRadius: "10px",
-              }}
-            >
+            <div style={{ textAlign: "center", padding: "40px", color: T.textDim, border: `1px dashed ${T.border}`, borderRadius: "10px", marginBottom: "16px" }}>
               Nenhum faturamento registrado no Assent Gestão.
+            </div>
+          )}
+
+          {/* Formulário de Registro de Contato */}
+          {mostrarFormContato && (
+            <div style={{ marginTop: "8px", padding: "20px", background: T.surfaceAlt, borderRadius: "12px", border: `1px solid ${T.borderAlt}` }}>
+              <div style={{ fontSize: "11px", fontWeight: "700", color: T.textDim, textTransform: "uppercase", letterSpacing: "1px", marginBottom: "16px" }}>
+                Novo Registro de Contato
+              </div>
+
+              {/* Data */}
+              <div style={{ marginBottom: "12px" }}>
+                <label style={{ display: "block", fontSize: "11px", color: T.textMid, marginBottom: "6px", fontWeight: "600" }}>
+                  Data do contato
+                </label>
+                <input
+                  type="date"
+                  value={formContato.data}
+                  onChange={(e) => setFormContato((f) => ({ ...f, data: e.target.value }))}
+                  style={inputStyle}
+                />
+              </div>
+
+              {/* Canal */}
+              <div style={{ marginBottom: "12px" }}>
+                <label style={{ display: "block", fontSize: "11px", color: T.textMid, marginBottom: "6px", fontWeight: "600" }}>
+                  Canal
+                </label>
+                <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+                  {CANAIS_CONTATO.map((canal) => (
+                    <button
+                      key={canal}
+                      onClick={() => setFormContato((f) => ({ ...f, canal }))}
+                      style={{
+                        padding: "6px 14px",
+                        borderRadius: "20px",
+                        fontSize: "11px",
+                        fontWeight: "600",
+                        cursor: "pointer",
+                        border: `1px solid ${formContato.canal === canal ? T.gold : T.border}`,
+                        background: formContato.canal === canal ? T.gold : "transparent",
+                        color: formContato.canal === canal ? "#000" : T.textMid,
+                        transition: "all 0.15s",
+                      }}
+                    >
+                      {canal}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Observação */}
+              <div style={{ marginBottom: "16px" }}>
+                <label style={{ display: "block", fontSize: "11px", color: T.textMid, marginBottom: "6px", fontWeight: "600" }}>
+                  Observação
+                </label>
+                <textarea
+                  value={formContato.observacao}
+                  onChange={(e) => setFormContato((f) => ({ ...f, observacao: e.target.value }))}
+                  placeholder="Ex: Cliente perguntou sobre promoção, prometeu voltar na próxima semana..."
+                  rows={3}
+                  style={{ ...inputStyle, resize: "vertical", lineHeight: "1.5" }}
+                />
+              </div>
+
+              {/* Botões */}
+              <div style={{ display: "flex", gap: "8px" }}>
+                <button
+                  onClick={salvarContato}
+                  disabled={salvando || !formContato.observacao.trim()}
+                  style={{
+                    flex: 1,
+                    padding: "11px",
+                    borderRadius: "8px",
+                    background: sucesso ? T.green : salvando || !formContato.observacao.trim() ? T.surfaceAlt : T.gold,
+                    color: sucesso ? "#fff" : salvando || !formContato.observacao.trim() ? T.textDim : "#000",
+                    border: "none",
+                    fontWeight: "700",
+                    cursor: salvando || !formContato.observacao.trim() ? "not-allowed" : "pointer",
+                    fontSize: "12px",
+                    textTransform: "uppercase",
+                    letterSpacing: "0.04em",
+                    transition: "all 0.2s",
+                  }}
+                >
+                  {sucesso ? "✓ Salvo!" : salvando ? "Salvando..." : "Salvar Contato"}
+                </button>
+                <button
+                  onClick={() => setMostrarFormContato(false)}
+                  style={{ padding: "11px 16px", borderRadius: "8px", background: "none", border: `1px solid ${T.border}`, color: T.textMid, cursor: "pointer", fontSize: "12px" }}
+                >
+                  Cancelar
+                </button>
+              </div>
             </div>
           )}
         </div>
 
         {/* Rodapé */}
-        <div style={{ padding: "20px", borderTop: `1px solid ${T.border}` }}>
-          <button
-            style={{
-              width: "100%",
-              padding: "12px",
-              borderRadius: "8px",
-              background: T.gold,
-              color: "#000",
-              border: "none",
-              fontWeight: "700",
-              cursor: "pointer",
-              fontSize: "12px",
-              textTransform: "uppercase",
-            }}
-          >
-            + Registrar Contato Manual
-          </button>
-        </div>
+        {!mostrarFormContato && (
+          <div style={{ padding: "20px", borderTop: `1px solid ${T.border}` }}>
+            <button
+              onClick={() => setMostrarFormContato(true)}
+              style={{
+                width: "100%",
+                padding: "12px",
+                borderRadius: "8px",
+                background: T.gold,
+                color: "#000",
+                border: "none",
+                fontWeight: "700",
+                cursor: "pointer",
+                fontSize: "12px",
+                textTransform: "uppercase",
+                letterSpacing: "0.04em",
+              }}
+            >
+              + Registrar Histórico de Contato
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
