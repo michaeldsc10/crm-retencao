@@ -370,7 +370,13 @@ function TabelaClientes({ clientes, T }) {
       ({ alto: 0, medio: 1, baixo: 2, indefinido: 3 }[a.risco] || 3) -
       ({ alto: 0, medio: 1, baixo: 2, indefinido: 3 }[b.risco] || 3)
   );
-
+<td 
+  style={{ padding: "12px 14px", cursor: "pointer" }} 
+  onClick={() => setClienteAtivo(c)} // 'c' é o objeto do cliente no map
+>
+  <div style={{ fontWeight: 600, color: T.text, textDecoration: "underline" }}>{c.nome}</div>
+  <div style={{ fontSize: 10, color: T.textDim, marginTop: 2 }}>{c.telefone || "—"}</div>
+</td>
   return (
     <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 10, overflow: "hidden" }}>
       <div style={{ overflowX: "auto" }}>
@@ -455,6 +461,85 @@ function CardsClientes({ clientes, T }) {
           </div>
         </div>
       ))}
+    </div>
+  );
+}
+
+//____________Modal para Clientes____________________________
+
+function ModalHistoricoCRM({ cliente, vendas, T, onClose }) {
+  if (!cliente) return null;
+
+  // Filtra as vendas vinculadas ao nome deste cliente e ordena por data
+  const historico = vendas
+    .filter(v => v.cliente === cliente.nome)
+    .sort((a, b) => new Date(b.data) - new Date(a.data));
+
+  const faturamentoTotal = historico.reduce((acc, v) => acc + (v.total || 0), 0);
+
+  return (
+    <div style={{
+      position: "fixed", inset: 0, background: "rgba(0,0,0,0.85)",
+      display: "flex", alignItems: "center", justifyContent: "center",
+      zIndex: 999, padding: "20px", backdropFilter: "blur(6px)"
+    }}>
+      <div style={{
+        background: T.surface, width: "100%", maxWidth: "550px",
+        borderRadius: "16px", border: `1px solid ${T.border}`,
+        display: "flex", flexDirection: "column", maxHeight: "90vh",
+        boxShadow: "0 20px 50px rgba(0,0,0,0.5)"
+      }}>
+        {/* Header - Identidade Assent */}
+        <div style={{ padding: "24px", borderBottom: `1px solid ${T.border}`, position: "relative" }}>
+          <div style={{ fontSize: "10px", color: T.gold, fontWeight: "800", textTransform: "uppercase", letterSpacing: "2px", marginBottom: "4px" }}>
+            Ficha do Cliente
+          </div>
+          <h2 style={{ margin: 0, fontSize: "22px", color: T.text, letterSpacing: "-0.5px" }}>{cliente.nome}</h2>
+          <div style={{ display: "flex", gap: "15px", marginTop: "10px" }}>
+             <span style={{ fontSize: "12px", color: T.textMid }}>LTV: <b style={{ color: T.green }}>{formatarReal(faturamentoTotal)}</b></span>
+             <span style={{ fontSize: "12px", color: T.textMid }}>Serviços: <b>{historico.length}</b></span>
+          </div>
+          <button onClick={onClose} style={{ position: "absolute", top: "24px", right: "24px", background: "none", border: "none", color: T.textDim, cursor: "pointer", fontSize: "20px" }}>✕</button>
+        </div>
+
+        {/* Lista de Vendas extraídas do AG */}
+        <div style={{ padding: "24px", overflowY: "auto", flex: 1 }}>
+          <div style={{ fontSize: "11px", fontWeight: "700", color: T.textDim, textTransform: "uppercase", marginBottom: "16px", letterSpacing: "1px" }}>
+            Histórico de Vendas (via Assent Gestão)
+          </div>
+          
+          {historico.map((v, i) => (
+            <div key={i} style={{ 
+              padding: "16px", background: T.surfaceAlt, borderRadius: "10px", 
+              marginBottom: "12px", border: `1px solid ${T.borderAlt}`
+            }}>
+              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "8px" }}>
+                <span style={{ fontSize: "11px", color: T.textDim }}>{new Date(v.data).toLocaleDateString('pt-BR')}</span>
+                <span style={{ fontSize: "13px", fontWeight: "700", color: T.gold }}>{formatarReal(v.total)}</span>
+              </div>
+              <div style={{ fontSize: "14px", color: T.text, fontWeight: "500" }}>
+                {v.itens?.map(item => item.produto).join(", ") || "Serviço"}
+              </div>
+            </div>
+          ))}
+
+          {historico.length === 0 && (
+            <div style={{ textAlign: "center", padding: "40px", color: T.textDim, border: `1px dashed ${T.border}`, borderRadius: "10px" }}>
+              Nenhum faturamento registrado no Assent Gestão.
+            </div>
+          )}
+        </div>
+
+        {/* Botão de Ação para o futuro Relacionamento */}
+        <div style={{ padding: "20px", borderTop: `1px solid ${T.border}` }}>
+          <button style={{ 
+            width: "100%", padding: "12px", borderRadius: "8px", background: T.gold, 
+            color: "#000", border: "none", fontWeight: "700", cursor: "pointer", fontSize: "12px", textTransform: "uppercase" 
+          }}>
+            + Registrar Contato Manual
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
@@ -915,6 +1000,7 @@ const clientesFiltrados = clientes.filter((c) => {
                       <span style={{ fontSize: 12, color: T.textMid }}>{s.label}</span>
                       <span style={{ fontSize: 13, fontWeight: 700, color: s.color }}>{s.val}</span>
                     </div>
+                        const [clienteAtivo, setClienteAtivo] = useState(null);
                   ))}
                 </div>
               </div>
@@ -922,7 +1008,7 @@ const clientesFiltrados = clientes.filter((c) => {
           )}
         </div>
       </div>
-
+    
       {/* ── Bottom Nav (mobile only) ── */}
       {bp.isMobile && (
         <div style={{
@@ -973,6 +1059,15 @@ const clientesFiltrados = clientes.filter((c) => {
           })}
         </div>
       )}
-    </div>
+        
+      {clienteAtivo && (
+        <ModalHistoricoCRM 
+          cliente={clienteAtivo} 
+          vendas={dadosBrutos?.vendas || []} 
+          T={T} 
+          onClose={() => setClienteAtivo(null)} 
+        />
+      )}
+    </div> // Fim da div principal do App
   );
 }
