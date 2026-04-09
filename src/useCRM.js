@@ -205,13 +205,38 @@ export function useCRM(empresaId) {
 
 export function montarPromptMensagem(insight, empresaNome) {
   const empresa = empresaNome || "a empresa";
-  const system = `Você é assistente de CRM de "${empresa}". Gere apenas o texto da mensagem de WhatsApp — sem aspas, sem introdução, sem explicação. Tom: caloroso, pessoal, nunca genérico. Máximo 4 linhas. Não mencione sistemas ou inteligência artificial.`;
+
+  const system = `Você é um especialista em retenção de clientes para pequenos negócios brasileiros, trabalhando para "${empresa}". 
+
+Sua tarefa é criar mensagens de WhatsApp altamente personalizadas e eficazes.
+
+Regras obrigatórias:
+- Use o nome do cliente de forma natural, apenas uma vez no início
+- Mencione especificamente o serviço/produto que ele usa
+- Crie senso de valor real, não urgência artificial
+- Tom: caloroso, próximo, humano — como um amigo que trabalha no negócio
+- Máximo 4 linhas curtas, ideal para leitura no celular
+- NUNCA mencione sistemas, IA, dados ou análises
+- NUNCA use frases genéricas como "sentimos sua falta" ou "temos novidades"
+- A mensagem deve parecer escrita manualmente por um atendente que conhece o cliente`;
 
   let user = "";
+
   if (insight.tipo === "risco") {
-    user = `Cliente: ${insight.cliente}. Ausente há ${insight.diasAusente} dias (frequência normal: ${insight.frequenciaMedia || "não calculada"} dias). Último serviço: ${insight.produtoFavorito || "não identificado"}. Gere mensagem de reativação para WhatsApp.`;
+    user = `Cliente: ${insight.cliente}
+Ausente há: ${insight.diasAusente} dias
+Frequência normal de retorno: ${insight.frequenciaMedia ? `${insight.frequenciaMedia} dias` : "não calculada"}
+Último serviço/produto: ${insight.produtoFavorito || "não identificado"}
+Ticket médio: R$ ${insight.ticketMedio || "não calculado"}
+
+Crie uma mensagem de reativação natural para WhatsApp. Mencione o serviço específico que ele usa. Não seja genérico.`;
   } else if (insight.tipo === "oportunidade") {
-    user = `Cliente: ${insight.cliente}. É fiel mas nunca experimentou "${insight.servico}" (R$ ${insight.preco}). Gere mensagem apresentando esse serviço de forma natural para WhatsApp.`;
+    user = `Cliente: ${insight.cliente}
+Serviço que sempre contrata: categoria ${insight.servico}
+Novo serviço para apresentar: "${insight.servico}" por R$ ${insight.preco}
+Ticket médio atual: R$ ${insight.ticketMedio}
+
+Crie uma mensagem apresentando o novo serviço de forma natural, como uma sugestão personalizada baseada no que ele já contrata.`;
   }
 
   return { system, user };
