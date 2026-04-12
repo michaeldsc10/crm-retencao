@@ -6,15 +6,7 @@ import Login from "./Login";
 import { useCRM, montarPromptMensagem } from "./useCRM";
 import LeadsPage from "./LeadsPage"; // ← NOVO
 import NotificacoesLeads from "./NotificacoesLeads";
-
-// No header, ao lado do toggle de tema:
-<NotificacoesLeads
-  acoesDisparadas={leads.acoesDisparadas}
-  leads={leads.leads}
-  T={T}
-  bp={bp}
-  onVerLead={(lead) => { /* abre painel lateral do lead */ }}
-/>
+import { useLeads } from "./useLeads";
 
 // ─── Hook de Breakpoint ───────────────────────────────────────────────────────
 function useBreakpoint() {
@@ -536,6 +528,7 @@ export default function App() {
   }, []);
 
   const { clientes, insights, metricas, config, dadosBrutos } = useCRM(usuario?.empresaId);
+  const leadsData = useLeads(usuario?.empresaId);
 
   const clientesFiltrados = clientes.filter((c) => {
     const nomeLimpo = (c.nome || "").toLowerCase();
@@ -675,6 +668,13 @@ export default function App() {
             </div>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
+            <NotificacoesLeads
+              acoesDisparadas={leadsData.acoesDisparadas}
+              leads={leadsData.leads}
+              T={T}
+              bp={bp}
+              onVerLead={() => {}}
+            />
             <button onClick={alternarTema} title={tema === "dark" ? "Modo claro" : "Modo escuro"} style={{ width: 34, height: 34, borderRadius: 8, border: `1px solid ${T.border}`, background: T.surfaceAlt, cursor: "pointer", fontSize: 16, display: "flex", alignItems: "center", justifyContent: "center", color: T.textMid }}>
               {tema === "dark" ? "☀️" : "🌙"}
             </button>
