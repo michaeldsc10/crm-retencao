@@ -5,6 +5,16 @@ import { auth, db } from "./firebase";
 import Login from "./Login";
 import { useCRM, montarPromptMensagem } from "./useCRM";
 import LeadsPage from "./LeadsPage"; // ← NOVO
+import NotificacoesLeads from "./NotificacoesLeads";
+
+// No header, ao lado do toggle de tema:
+<NotificacoesLeads
+  acoesDisparadas={leads.acoesDisparadas}
+  leads={leads.leads}
+  T={T}
+  bp={bp}
+  onVerLead={(lead) => { /* abre painel lateral do lead */ }}
+/>
 
 // ─── Hook de Breakpoint ───────────────────────────────────────────────────────
 function useBreakpoint() {
