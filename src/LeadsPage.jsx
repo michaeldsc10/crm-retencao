@@ -513,7 +513,7 @@ function DetalheLeadPanel({ lead, empresaId, empresaNome, T, onFechar }) {
 // ─── Painel de automações ─────────────────────────────────────────────────────
 function AutomacoesPanel({ automacoes, empresaId, T, bp }) {
   const [criando, setCriando] = useState(false);
-  const [form, setForm] = useState({ nome: "", gatilho: "score_acima", gatilhoValor: 30, acao: "notificar_vendas", acaoDados: {} });
+  const [form, setForm] = useState({ nome: "", gatilho: "score_acima", gatilhoValor: 30, acao: "notificar_vendas", acaoDados: { url: "" } });
   const [salvando, setSalvando] = useState(false);
 
   const GATILHOS = [
@@ -522,12 +522,11 @@ function AutomacoesPanel({ automacoes, empresaId, T, bp }) {
     { value: "inativo_dias",  label: "Inativo há X dias" },
   ];
   const ACOES = [
-    { value: "notificar_vendas", label: "Notificar equipe de vendas" },
-    { value: "enviar_email",     label: "Enviar email" },
-    { value: "webhook",          label: "Disparar webhook" },
+    { value: "notificar_vendas", label: "Notificar no CRM" },
+    { value: "webhook",          label: "Disparar webhook (Zapier / Make)" },
   ];
   const CORES_GATILHO = { score_acima: "#c9a84c", form_submit: "#4aad7a", inativo_dias: "#d4903a" };
-  const CORES_ACAO    = { notificar_vendas: "#e05252", enviar_email: "#4a8fd4", webhook: "#8e8e99" };
+  const CORES_ACAO    = { notificar_vendas: "#e05252", webhook: "#4a8fd4" };
 
   async function criar(e) {
     e.preventDefault();
@@ -539,7 +538,7 @@ function AutomacoesPanel({ automacoes, empresaId, T, bp }) {
         gatilhoValor: Number(form.gatilhoValor) || null,
       });
       setCriando(false);
-      setForm({ nome: "", gatilho: "score_acima", gatilhoValor: 30, acao: "notificar_vendas", acaoDados: {} });
+      setForm({ nome: "", gatilho: "score_acima", gatilhoValor: 30, acao: "notificar_vendas", acaoDados: { url: "" } });
     } finally { setSalvando(false); }
   }
 
@@ -655,16 +654,55 @@ function AutomacoesPanel({ automacoes, empresaId, T, bp }) {
                   />
                 </div>
               )}
-              <div style={{ marginBottom: 20 }}>
+              <div style={{ marginBottom: form.acao === "webhook" ? 10 : 20 }}>
                 <label style={{ fontSize: 11, color: T.textMid, display: "block", marginBottom: 5 }}>Ação</label>
-                <select value={form.acao} onChange={e => setForm(p => ({ ...p, acao: e.target.value }))} style={{
-                  width: "100%", padding: "9px 12px", borderRadius: 7, fontSize: 12,
-                  border: `1px solid ${T.borderAlt}`, outline: "none",
-                  background: T.surfaceAlt, color: T.text, fontFamily: "inherit", cursor: "pointer",
-                }}>
+                <select
+                  value={form.acao}
+                  onChange={e => setForm(p => ({ ...p, acao: e.target.value, acaoDados: { url: "" } }))}
+                  style={{
+                    width: "100%", padding: "9px 12px", borderRadius: 7, fontSize: 12,
+                    border: `1px solid ${T.borderAlt}`, outline: "none",
+                    background: T.surfaceAlt, color: T.text, fontFamily: "inherit", cursor: "pointer",
+                  }}
+                >
                   {ACOES.map(a => <option key={a.value} value={a.value}>{a.label}</option>)}
                 </select>
               </div>
+
+              {/* Dica: Notificar no CRM */}
+              {form.acao === "notificar_vendas" && (
+                <div style={{
+                  marginBottom: 20, padding: "10px 12px", borderRadius: 7,
+                  background: T.surfaceAlt, border: `1px solid ${T.border}`,
+                  fontSize: 11, color: T.textDim, lineHeight: 1.6,
+                }}>
+                  🔔 Um alerta aparecerá no sino do CRM toda vez que o gatilho disparar. Ideal para quem abre o sistema diariamente.
+                </div>
+              )}
+
+              {/* Campo URL do webhook */}
+              {form.acao === "webhook" && (
+                <div style={{ marginBottom: 20 }}>
+                  <label style={{ fontSize: 11, color: T.textMid, display: "block", marginBottom: 5 }}>
+                    URL do webhook
+                  </label>
+                  <input
+                    type="url"
+                    placeholder="https://hooks.zapier.com/hooks/catch/..."
+                    required
+                    value={form.acaoDados?.url || ""}
+                    onChange={e => setForm(p => ({ ...p, acaoDados: { url: e.target.value } }))}
+                    style={{
+                      width: "100%", padding: "9px 12px", borderRadius: 7, fontSize: 12,
+                      border: `1px solid ${T.borderAlt}`, outline: "none",
+                      background: T.surfaceAlt, color: T.text, fontFamily: "inherit",
+                    }}
+                  />
+                  <div style={{ fontSize: 10, color: T.textDim, marginTop: 5, lineHeight: 1.6 }}>
+                    Cole a URL do Zapier, Make ou n8n. Não sabe como criar? Veja o guia gratuito no site.
+                  </div>
+                </div>
+              )}
               <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
                 <button type="button" onClick={() => setCriando(false)} style={{
                   padding: "9px 16px", borderRadius: 7, fontSize: 12,
