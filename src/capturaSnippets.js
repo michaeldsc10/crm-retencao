@@ -5,13 +5,17 @@
  * URL da Cloud Function:
  *   Produção : https://southamerica-east1-assent-2b945.cloudfunctions.net/capturarLead
  *   Via Hosting (rewrite): https://SEU_DOMINIO/api/capturarLead
+ *
+ * Segurança: os snippets usam `slug` (ex: "barbearia-joao-x7k2") em vez do
+ * empresaId real. O slug é resolvido internamente pela Cloud Function —
+ * o empresaId nunca é exposto ao cliente final.
  */
 
 // ─────────────────────────────────────────────────────────────────────────────
 // 1. SNIPPET HTML PURO (colar em qualquer landing page)
 // ─────────────────────────────────────────────────────────────────────────────
 
-export const SNIPPET_HTML = (empresaId) => `
+export const SNIPPET_HTML = (slug) => `
 <form id="assent-form">
   <input type="text"  name="nome"     placeholder="Seu nome"     required />
   <input type="email" name="email"    placeholder="Seu e-mail"   required />
@@ -22,8 +26,8 @@ export const SNIPPET_HTML = (empresaId) => `
 
 <script>
 (function () {
-  var EMPRESA_ID = "${empresaId}";
-  var ENDPOINT   = "https://southamerica-east1-assent-2b945.cloudfunctions.net/capturarLead";
+  var SLUG     = "${slug}";
+  var ENDPOINT = "https://southamerica-east1-assent-2b945.cloudfunctions.net/capturarLead";
 
   // Captura UTMs da URL automaticamente
   function getUTMs() {
@@ -37,13 +41,13 @@ export const SNIPPET_HTML = (empresaId) => `
 
   document.getElementById("assent-form").addEventListener("submit", function (e) {
     e.preventDefault();
-    var f    = e.target;
-    var msg  = document.getElementById("assent-msg");
-    var btn  = f.querySelector("button");
+    var f   = e.target;
+    var msg = document.getElementById("assent-msg");
+    var btn = f.querySelector("button");
     btn.disabled = true;
 
     var payload = Object.assign(
-      { empresaId: EMPRESA_ID, landingPage: window.location.href },
+      { slug: SLUG, landingPage: window.location.href },
       getUTMs(),
       { nome: f.nome.value, email: f.email.value, telefone: (f.telefone || {}).value || "" }
     );
@@ -57,8 +61,8 @@ export const SNIPPET_HTML = (empresaId) => `
       .then(function (data) {
         msg.style.display = "block";
         if (data.ok) {
-          msg.style.color = "green";
-          msg.textContent = "Obrigado! Entraremos em contato em breve.";
+          msg.style.color   = "green";
+          msg.textContent   = "Obrigado! Entraremos em contato em breve.";
           f.reset();
         } else {
           throw new Error(data.erro || "Erro desconhecido");
@@ -66,9 +70,9 @@ export const SNIPPET_HTML = (empresaId) => `
       })
       .catch(function (err) {
         msg.style.display = "block";
-        msg.style.color = "red";
-        msg.textContent = "Erro ao enviar. Tente novamente.";
-        btn.disabled = false;
+        msg.style.color   = "red";
+        msg.textContent   = "Erro ao enviar. Tente novamente.";
+        btn.disabled      = false;
         console.error("[Assent]", err);
       });
   });
@@ -81,7 +85,7 @@ export const SNIPPET_HTML = (empresaId) => `
 // 2. SNIPPET REACT (componente funcional, zero dependências externas)
 // ─────────────────────────────────────────────────────────────────────────────
 
-export const SNIPPET_REACT = (empresaId) => `
+export const SNIPPET_REACT = (slug) => `
 import { useState } from "react";
 
 const ENDPOINT = "https://southamerica-east1-assent-2b945.cloudfunctions.net/capturarLead";
@@ -96,8 +100,8 @@ function getUTMs() {
 }
 
 export default function AssentForm() {
-  const [form, setForm]     = useState({ nome: "", email: "", telefone: "" });
-  const [status, setStatus] = useState(null); // null | "ok" | "erro"
+  const [form, setForm]       = useState({ nome: "", email: "", telefone: "" });
+  const [status, setStatus]   = useState(null); // null | "ok" | "erro"
   const [loading, setLoading] = useState(false);
 
   const handle = (e) => setForm((f) => ({ ...f, [e.target.name]: e.target.value }));
@@ -110,7 +114,7 @@ export default function AssentForm() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          empresaId: "${empresaId}",
+          slug: "${slug}",
           landingPage: window.location.href,
           ...getUTMs(),
           ...form,
@@ -148,13 +152,13 @@ export default function AssentForm() {
 // 3. SNIPPET API DIRETA (cURL / Postman / fetch manual)
 // ─────────────────────────────────────────────────────────────────────────────
 
-export const SNIPPET_API = (empresaId) => `
+export const SNIPPET_API = (slug) => `
 # cURL
 curl -X POST \\
   https://southamerica-east1-assent-2b945.cloudfunctions.net/capturarLead \\
   -H "Content-Type: application/json" \\
   -d '{
-    "empresaId":   "${empresaId}",
+    "slug":        "${slug}",
     "nome":        "João Silva",
     "email":       "joao@exemplo.com",
     "telefone":    "11999990000",
@@ -167,6 +171,6 @@ curl -X POST \\
 # Resposta esperada (sucesso)
 # { "ok": true, "leadId": "lead_1234567_abc123", "score": 55, "temperatura": "quente", "mensagem": "Lead capturado com sucesso" }
 
-# Resposta esperada (erro)
-# { "ok": false, "erros": ["empresaId é obrigatório e deve ser string"] }
+# Resposta esperada (erro de slug inválido)
+# { "ok": false, "erro": "Empresa não encontrada" }
 `.trim();
