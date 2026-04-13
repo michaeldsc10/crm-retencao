@@ -83,7 +83,7 @@ function ModalZapier({ T, onFechar }) {
     {
       num: "1",
       titulo: "Crie uma conta no Zapier",
-      descricao: "Acesse zapier.com e clique em "Sign up free". Use seu e-mail ou entre com o Google. Escolha o plano gratuito (Free) — é suficiente para até 100 leads/mês.",
+      descricao: "Acesse zapier.com e clique em Sign up free". Use seu e-mail ou entre com o Google. Escolha o plano gratuito (Free) — é suficiente para até 100 leads/mês.",
       dica: null,
     },
     {
