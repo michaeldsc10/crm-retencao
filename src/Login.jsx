@@ -22,15 +22,10 @@ export default function Login({ onLogin }) {
       const cred = await signInWithEmailAndPassword(auth, email, senha);
       const uid = cred.user.uid;
 
-      // Busca o documento do usuário no Firestore
       const ref = doc(db, "licencas", uid);
-     
-
       const snap = await getDoc(ref);
 
-
       if (!snap.exists()) {
-        // Cria o documento se não existir (primeiro login)
         await setDoc(ref, {
           email: cred.user.email,
           clienteCRM: false,
@@ -43,21 +38,19 @@ export default function Login({ onLogin }) {
       }
 
       const dados = snap.data();
-
       if (!dados.clienteCRM) {
         setErro("Sua conta não tem acesso ao CRM. Entre em contato com o suporte.");
         await auth.signOut();
         return;
       }
 
-      // Acesso liberado — passa o empresaId para o App
       onLogin({ uid, empresaId: uid, email: cred.user.email });
     } catch (err) {
       const mensagens = {
-        "auth/user-not-found": "Usuário não encontrado.",
-        "auth/wrong-password": "Senha incorreta.",
-        "auth/invalid-email": "Email inválido.",
-        "auth/too-many-requests": "Muitas tentativas. Aguarde alguns minutos.",
+        "auth/user-not-found":     "Usuário não encontrado.",
+        "auth/wrong-password":     "Senha incorreta.",
+        "auth/invalid-email":      "Email inválido.",
+        "auth/too-many-requests":  "Muitas tentativas. Aguarde alguns minutos.",
         "auth/invalid-credential": "Email ou senha incorretos.",
       };
       setErro(mensagens[err.code] || "Erro ao entrar. Tente novamente.");
