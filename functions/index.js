@@ -39,10 +39,14 @@ function calcularTemperatura(score) {
   return "frio";
 }
 
+// Valida body aceitando slug OU empresaId (retrocompatibilidade)
 function validarCaptura(body) {
   const erros = [];
-  if (!body.empresaId || typeof body.empresaId !== "string")
-    erros.push("empresaId é obrigatório e deve ser string");
+  const temIdentificador =
+    (body.slug && typeof body.slug === "string") ||
+    (body.empresaId && typeof body.empresaId === "string");
+  if (!temIdentificador)
+    erros.push("Informe 'slug' (recomendado) ou 'empresaId'");
   if (!body.nome && !body.email && !body.telefone)
     erros.push("Informe ao menos um de: nome, email, telefone");
   if (body.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(body.email))
@@ -50,8 +54,21 @@ function validarCaptura(body) {
   return erros;
 }
 
+// Resolve slug → empresaId. Retorna null se não encontrado.
+async function resolverEmpresaId(body) {
+  // Novo fluxo: recebe slug público
+  if (body.slug) {
+    const slugDoc = await db.collection("slugs").doc(body.slug).get();
+    if (!slugDoc.exists) return null;
+    return slugDoc.data().empresaId;
+  }
+  // Fluxo legado: recebe empresaId direto (mantido para retrocompatibilidade)
+  return body.empresaId;
+}
+
 // ─── Cloud Function 1: capturarLead ─────────────────────────────────────────
-// POST público (sem auth) — chamado pelos formulários das landing pages
+// POST público (sem auth) — chamado pelos formulários das landing pages.
+// Aceita { slug } (novo, seguro) ou { empresaId } (legado, retrocompat).
 
 exports.capturarLead = onRequest(
   {
@@ -70,12 +87,20 @@ exports.capturarLead = onRequest(
     const erros = validarCaptura(body);
     if (erros.length > 0) return res.status(400).json({ ok: false, erros });
 
+    // Resolve empresaId — via slug (seguro) ou direto (legado)
+    const empresaId = await resolverEmpresaId(body);
+    if (!empresaId) {
+      return res.status(404).json({ ok: false, erro: "Empresa não encontrada" });
+    }
+
     const {
-      empresaId,
       nome = "", email = "", telefone = "",
       utm_source = "", utm_campaign = "", utm_medium = "",
       landingPage = "",
     } = body;
+
+    // Usa o slug como origem quando disponível (útil para analytics)
+    const origemFinal = utm_source || (body.slug ? `slug:${body.slug}` : "direto");
 
     const score       = calcularScore({ utm_source, utm_medium, landingPage, nome, email, telefone });
     const temperatura = calcularTemperatura(score);
@@ -89,7 +114,7 @@ exports.capturarLead = onRequest(
       score,
       temperatura,
       status:      "novo",
-      origem:      utm_source || "direto",
+      origem:      origemFinal,
       utm:         { source: utm_source, campaign: utm_campaign, medium: utm_medium },
       landingPage,
       eventos: [{
@@ -108,7 +133,7 @@ exports.capturarLead = onRequest(
         { leads: FieldValue.arrayUnion(novoLead), atualizadoEm: agora },
         { merge: true }
       );
-      console.log(`[capturarLead] ${empresaId} | score:${score} | ${temperatura}`);
+      console.log(`[capturarLead] empresa:${empresaId} | score:${score} | ${temperatura} | via:${body.slug ? "slug" : "empresaId"}`);
       return res.status(200).json({
         ok: true, leadId: novoLead.id, score, temperatura,
         mensagem: "Lead capturado com sucesso",
@@ -203,7 +228,7 @@ exports.dispararAutomacoes = onDocumentWritten(
 
     if (tarefas.length === 0) return;
 
-    const resultados     = await Promise.all(tarefas);
+    const resultados      = await Promise.all(tarefas);
     const disparosSucesso = resultados.filter(r => r.ok);
     if (disparosSucesso.length === 0) return;
 
@@ -224,3 +249,59 @@ exports.dispararAutomacoes = onDocumentWritten(
     await db.collection("leads").doc(empresaId).update({ leads: leadsAtualizados });
   }
 );
+
+// ─── Cloud Function 3: criarEmpresa (DESATIVADA — requer plano Blaze) ────────
+// Descomente e faça deploy quando migrar para o plano Blaze.
+// Vantagem sobre o frontend: cria todos os documentos atomicamente num batch,
+// garante que slug é único antes de criar, e nunca expõe empresaId ao cliente.
+//
+// exports.criarEmpresa = onRequest(
+//   { region: "southamerica-east1", cors: true, timeoutSeconds: 15 },
+//   async (req, res) => {
+//     if (req.method !== "POST")
+//       return res.status(405).json({ ok: false, erro: "Método não permitido" });
+//
+//     const { uid, email, nomeEmpresa } = req.body || {};
+//     if (!uid || !email || !nomeEmpresa)
+//       return res.status(400).json({ ok: false, erro: "uid, email e nomeEmpresa são obrigatórios" });
+//
+//     // Gera slug único: "nome-da-empresa-x7k2"
+//     const slugBase = nomeEmpresa
+//       .toLowerCase()
+//       .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+//       .replace(/[^a-z0-9]+/g, "-")
+//       .replace(/^-|-$/g, "")
+//       .slice(0, 32);
+//     const sufixo = Math.random().toString(36).slice(2, 6);
+//     const slug   = `${slugBase}-${sufixo}`;
+//
+//     // Verifica se slug já existe (colisão improvável mas possível)
+//     const slugExiste = await db.collection("slugs").doc(slug).get();
+//     if (slugExiste.exists)
+//       return res.status(409).json({ ok: false, erro: "Slug já existe, tente novamente" });
+//
+//     const agora = new Date();
+//     const batch = db.batch();
+//
+//     batch.set(db.collection("dados").doc(uid), {
+//       clientes: [], vendas: [], servicos: [],
+//       config: { nomeEmpresa, slugPublico: slug, criadoEm: agora, plano: "trial" },
+//     });
+//     batch.set(db.collection("leads").doc(uid), { leads: [], automacoes: [] });
+//     batch.set(db.collection("licencas").doc(uid), {
+//       email, clienteCRM: true, plano: "trial", criadoEm: agora,
+//     });
+//     batch.set(db.collection("slugs").doc(slug), {
+//       empresaId: uid, nomeEmpresa, criadoEm: agora,
+//     });
+//
+//     try {
+//       await batch.commit();
+//       console.log(`[criarEmpresa] uid:${uid} | slug:${slug}`);
+//       return res.status(200).json({ ok: true, slug });
+//     } catch (err) {
+//       console.error("[criarEmpresa] Erro:", err);
+//       return res.status(500).json({ ok: false, erro: "Erro ao criar empresa" });
+//     }
+//   }
+// );
