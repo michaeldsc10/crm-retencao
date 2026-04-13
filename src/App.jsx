@@ -4,7 +4,8 @@ import { doc, getDoc } from "firebase/firestore";
 import { auth, db } from "./firebase";
 import Login from "./Login";
 import { useCRM, montarPromptMensagem } from "./useCRM";
-import LeadsPage from "./LeadsPage"; // ← NOVO
+import LeadsPage from "./LeadsPage";
+import ConfigPage from "./ConfigPage";
 import NotificacoesLeads from "./NotificacoesLeads";
 import { useLeads } from "./useLeads";
 
@@ -553,7 +554,8 @@ export default function App() {
     { id: "ia",       icon: "✦", label: "IA",        labelFull: "Assistente IA",  badge: null },
     { id: "painel",   icon: "▦", label: "Painel",    labelFull: "Painel",         badge: null },
     // ── NOVOS ────────────────────────────────────────────────────────────────
-    { id: "leads",    icon: "◎", label: "Leads",     labelFull: "Gestão de Leads", badge: null },
+    { id: "leads",  icon: "◎", label: "Leads",  labelFull: "Gestão de Leads", badge: null },
+    { id: "config", icon: "⚙", label: "Config", labelFull: "Configurações",   badge: null },
   ];
 
   const sidebarWidth = bp.isMobile ? 0 : sidebarAberta ? 230 : 60;
@@ -778,9 +780,19 @@ export default function App() {
             </>
           )}
 
-          {/* ── Leads (NOVO) ── */}
+          {/* ── Leads ── */}
           {aba === "leads" && (
             <LeadsPage
+              T={T}
+              bp={bp}
+              empresaId={usuario?.empresaId}
+              config={config}
+            />
+          )}
+
+          {/* ── Configurações ── */}
+          {aba === "config" && (
+            <ConfigPage
               T={T}
               bp={bp}
               empresaId={usuario?.empresaId}
