@@ -11,6 +11,7 @@ import {
   registrarEventoLead,
   salvarAutomacao,
   removerAutomacao,
+  removerLead,
   montarPromptLead,
 } from "./useLeads";
 
@@ -247,6 +248,8 @@ function DetalheLeadPanel({ lead, empresaId, empresaNome, T, onFechar }) {
   const [msg, setMsg]         = useState(null);
   const [gerandoMsg, setGerandoMsg] = useState(false);
   const [novoEvento, setNovoEvento] = useState("");
+  const [confirmandoExclusao, setConfirmandoExclusao] = useState(false);
+  const [excluindo, setExcluindo] = useState(false);
 
   const telLimpo = (lead.telefone || "").replace(/\D/g, "");
 
@@ -257,6 +260,16 @@ function DetalheLeadPanel({ lead, empresaId, empresaNome, T, onFechar }) {
     email_clicado: "🔗",
     anotacao:      "📝",
   };
+
+  async function excluirLead() {
+    setExcluindo(true);
+    try {
+      await removerLead(empresaId, lead.id);
+      onFechar();
+    } finally {
+      setExcluindo(false);
+    }
+  }
 
   async function salvarStatus(novoStatus) {
     setSalvando(true);
@@ -326,11 +339,52 @@ function DetalheLeadPanel({ lead, empresaId, empresaNome, T, onFechar }) {
             <div style={{ fontSize: 14, fontWeight: 700, color: T.text }}>{lead.nome}</div>
             <div style={{ fontSize: 11, color: T.textDim, marginTop: 1 }}>{lead.email}</div>
           </div>
+          <button
+            onClick={() => setConfirmandoExclusao(true)}
+            style={{
+              background: "none", border: `1px solid ${T.red}55`, color: T.red,
+              fontSize: 11, fontWeight: 600, padding: "5px 10px", borderRadius: 6,
+              cursor: "pointer", flexShrink: 0, fontFamily: "inherit",
+            }}
+          >Excluir</button>
           <button onClick={onFechar} style={{
             background: "none", border: "none", color: T.textDim,
             fontSize: 18, cursor: "pointer", flexShrink: 0,
           }}>✕</button>
         </div>
+
+        {/* Confirmação de exclusão */}
+        {confirmandoExclusao && (
+          <div style={{
+            margin: "0 20px 0", padding: "12px 14px",
+            background: T.redDim, border: `1px solid ${T.red}44`, borderRadius: 8,
+          }}>
+            <p style={{ fontSize: 12, color: T.red, margin: "0 0 10px", lineHeight: 1.6 }}>
+              Excluir este lead permanentemente?
+            </p>
+            <div style={{ display: "flex", gap: 8 }}>
+              <button
+                onClick={excluirLead}
+                disabled={excluindo}
+                style={{
+                  fontSize: 11, fontWeight: 700, padding: "6px 14px", borderRadius: 6,
+                  background: excluindo ? T.surfaceAlt : T.red,
+                  color: excluindo ? T.textMid : "#fff",
+                  border: "none", cursor: excluindo ? "not-allowed" : "pointer",
+                  fontFamily: "inherit",
+                }}
+              >{excluindo ? "Excluindo..." : "Confirmar"}</button>
+              <button
+                onClick={() => setConfirmandoExclusao(false)}
+                style={{
+                  fontSize: 11, padding: "6px 14px", borderRadius: 6,
+                  background: "none", border: `1px solid ${T.border}`,
+                  color: T.textMid, cursor: "pointer", fontFamily: "inherit",
+                }}
+              >Cancelar</button>
+            </div>
+          </div>
+        )}
 
         <div style={{ padding: "20px", flex: 1 }}>
 
