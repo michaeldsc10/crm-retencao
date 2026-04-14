@@ -511,7 +511,7 @@ function DetalheLeadPanel({ lead, empresaId, empresaNome, T, onFechar }) {
 }
 
 // ─── Painel de automações ─────────────────────────────────────────────────────
-function AutomacoesPanel({ automacoes, empresaId, T, bp }) {
+function AutomacoesPanel({ automacoes, empresaId, acoesDisparadas = [], T, bp }) {
   const [criando, setCriando] = useState(false);
   const [form, setForm] = useState({ nome: "", gatilho: "score_acima", gatilhoValor: 30, acao: "notificar_vendas", acaoDados: { url: "" } });
   const [salvando, setSalvando] = useState(false);
@@ -554,6 +554,31 @@ function AutomacoesPanel({ automacoes, empresaId, T, bp }) {
           }}
         >+ Nova automação</button>
       </div>
+
+      {/* ── Alertas de automações disparadas ── */}
+      {acoesDisparadas.length > 0 && (
+        <div style={{ marginBottom: 16, display: "flex", flexDirection: "column", gap: 8 }}>
+          {acoesDisparadas.map(({ automacao, lead }) => (
+            <div key={`${automacao.id}-${lead.id}`} style={{
+              background: "#1a1a10", border: `1px solid ${T.gold}44`,
+              borderLeft: `3px solid ${T.gold}`,
+              borderRadius: 8, padding: "12px 14px",
+              display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap",
+            }}>
+              <span style={{ fontSize: 14 }}>🔔</span>
+              <div style={{ flex: 1 }}>
+                <span style={{ fontSize: 12, fontWeight: 700, color: T.gold }}>
+                  {automacao.nome}
+                </span>
+                <span style={{ fontSize: 12, color: T.textMid }}> · </span>
+                <span style={{ fontSize: 12, color: T.textMid }}>
+                  {lead.nome} — {lead.temperatura}, score {lead.score}
+                </span>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
 
       {automacoes.length === 0 ? (
         <div style={{ textAlign: "center", padding: "48px 0", color: T.textDim, fontSize: 13, border: `1px dashed ${T.border}`, borderRadius: 10 }}>
@@ -749,7 +774,7 @@ function Chip({ color, children }) {
 // Recebe T, bp, empresaId e config — mesma assinatura das outras seções do App.
 
 export default function LeadsPage({ T, bp, empresaId, config }) {
-  const { leads, metricas, automacoes, carregando, erro } = useLeads(empresaId);
+  const { leads, metricas, automacoes, carregando, erro, acoesDisparadas } = useLeads(empresaId);
   const [subAba, setSubAba] = useState("lista");     // "lista" | "automacoes"
   const [leadSelecionado, setLeadSelecionado] = useState(null);
   const [busca, setBusca] = useState("");
@@ -864,7 +889,7 @@ export default function LeadsPage({ T, bp, empresaId, config }) {
 
       {/* ── Aba Automações ── */}
       {subAba === "automacoes" && (
-        <AutomacoesPanel automacoes={automacoes} empresaId={empresaId} T={T} bp={bp} />
+        <AutomacoesPanel automacoes={automacoes} empresaId={empresaId} acoesDisparadas={acoesDisparadas} T={T} bp={bp} />
       )}
 
       {/* Painel lateral de detalhe */}
