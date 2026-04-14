@@ -89,7 +89,7 @@ function ModalZapier({ T, onFechar }) {
     {
       num: "2",
       titulo: "Crie um novo Zap",
-      descricao: "Clique no botão laranja "+ Create Zap" no canto superior esquerdo. Você verá dois blocos: "Trigger" (gatilho) e "Action" (ação).",
+      descricao: "Clique no botão laranja \"+ Create Zap\" no canto superior esquerdo. Você verá dois blocos: \"Trigger\" (gatilho) e \"Action\" (ação).",
       dica: null,
     },
     {
