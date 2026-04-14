@@ -239,6 +239,19 @@ export function useLeads(empresaId) {
 // ─── Ações de escrita no Firestore ────────────────────────────────────────────
 // Funções standalone (não dentro do hook) para manter o padrão do projeto.
 
+// Remove campos calculados pelo enriquecerLeads antes de comparar/salvar no Firestore.
+// O arrayRemove exige match exato — se o objeto tiver campos extras, não remove nada.
+const CAMPOS_CALCULADOS = [
+  "score", "scoreBreakdown", "temperatura",
+  "ultimaAtividade", "diasSemAtividade", "utmSource", "utmCampanha",
+];
+
+function stripCalculados(lead) {
+  const limpo = { ...lead };
+  CAMPOS_CALCULADOS.forEach(k => delete limpo[k]);
+  return limpo;
+}
+
 /**
  * Adiciona um novo lead ao array leads do doc da empresa.
  * Chamado pelo formulário de captação ou pelo tracker.
@@ -296,7 +309,7 @@ export async function atualizarStatusLead(empresaId, leadAtual, novoStatus) {
   // Remove undefined
   Object.keys(leadAtualizado).forEach(k => leadAtualizado[k] === undefined && delete leadAtualizado[k]);
 
-  await updateDoc(ref, { leads: arrayRemove(leadAtual._raw || leadAtual) });
+  await updateDoc(ref, { leads: arrayRemove(stripCalculados(leadAtual)) });
   await updateDoc(ref, { leads: arrayUnion(leadAtualizado) });
 }
 
@@ -321,7 +334,7 @@ export async function registrarEventoLead(empresaId, leadAtual, evento) {
   ["score","scoreBreakdown","temperatura","ultimaAtividade","diasSemAtividade","utmSource","utmCampanha"]
     .forEach(k => delete leadAtualizado[k]);
 
-  await updateDoc(ref, { leads: arrayRemove(leadAtual) });
+  await updateDoc(ref, { leads: arrayRemove(stripCalculados(leadAtual)) });
   await updateDoc(ref, { leads: arrayUnion(leadAtualizado) });
 }
 
