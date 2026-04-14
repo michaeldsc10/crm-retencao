@@ -83,13 +83,13 @@ function ModalZapier({ T, onFechar }) {
     {
       num: "1",
       titulo: "Crie uma conta no Zapier",
-      descricao: "Acesse zapier.com e clique em \"Sign up free\". Use seu e-mail ou entre com o Google. Escolha o plano gratuito (Free) — é suficiente para até 100 leads/mês.",
+      descricao: `Acesse zapier.com e clique em "Sign up free". Use seu e-mail ou entre com o Google. Escolha o plano gratuito (Free) — é suficiente para até 100 leads/mês.`,
       dica: null,
     },
     {
       num: "2",
       titulo: "Crie um novo Zap",
-      descricao: "Clique no botão laranja \"+ Create Zap\" no canto superior esquerdo. Você verá dois blocos: \"Trigger\" (gatilho) e \"Action\" (ação).",
+      descricao: `Clique no botão laranja "+ Create Zap" no canto superior esquerdo. Você verá dois blocos: "Trigger" (gatilho) e "Action" (ação).`,
       dica: null,
     },
     {
@@ -310,11 +310,42 @@ export default function ConfigPage({ T, bp, empresaId, config }) {
   const [confirmarRegen, setConfirmarRegen] = useState(false);
   const [zapierAberto, setZapierAberto] = useState(false);
   const [feedbackRegen, setFeedbackRegen] = useState(null); // "ok" | "erro"
+  const [gerandoSlug, setGerandoSlug]   = useState(false);
 
   const cfUrl = "https://southamerica-east1-assent-2b945.cloudfunctions.net/capturarLead";
 
-  // Atualiza slug local quando config carregar do Firestore
-  const slugExibido = slugAtual || slug || "carregando...";
+  // Distingue três estados: ainda carregando, slug ausente, slug presente
+  const slugCarregando = config === null;
+  const slugAusente    = config !== null && !config?.slugPublico && !slugAtual;
+  const slugExibido    = slugAtual || slug || "";
+
+  async function gerarPrimeiroSlug() {
+    if (!empresaId) return;
+    setGerandoSlug(true);
+    setFeedbackRegen(null);
+    try {
+      const novoSlug = gerarSlug(config?.nomeEmpresa || "");
+
+      await setDoc(doc(db, "slugs", novoSlug), {
+        empresaId,
+        nomeEmpresa: config?.nomeEmpresa || "",
+        criadoEm: new Date().toISOString(),
+      });
+
+      await updateDoc(doc(db, "dados", empresaId), {
+        "config.slugPublico": novoSlug,
+      });
+
+      setSlugAtual(novoSlug);
+      setFeedbackRegen("ok");
+      setTimeout(() => setFeedbackRegen(null), 3000);
+    } catch (err) {
+      console.error("[ConfigPage] Erro ao gerar primeiro slug:", err);
+      setFeedbackRegen("erro");
+    } finally {
+      setGerandoSlug(false);
+    }
+  }
 
   async function regenerarSlug() {
     if (!empresaId || !config?.nomeEmpresa) return;
@@ -365,28 +396,58 @@ export default function ConfigPage({ T, bp, empresaId, config }) {
       }}>
         <SecaoTitulo T={T}>Seu link de captura de leads</SecaoTitulo>
 
-        {/* Caixa do slug */}
-        <div style={{
-          background: T.bg, border: `1px solid ${T.borderAlt}`,
-          borderRadius: 8, padding: "12px 16px", marginBottom: 14,
-          display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap",
-        }}>
-          <div style={{ flex: 1, minWidth: 0 }}>
+        {/* Caixa do slug — três estados: carregando / ausente / presente */}
+        {slugCarregando ? (
+          <div style={{
+            background: T.bg, border: `1px solid ${T.borderAlt}`,
+            borderRadius: 8, padding: "12px 16px", marginBottom: 14,
+          }}>
             <div style={{ fontSize: 10, color: T.textDim, marginBottom: 4, textTransform: "uppercase", letterSpacing: "0.08em" }}>Slug público</div>
-            <div style={{ fontSize: 13, fontWeight: 600, color: T.gold, fontFamily: "ui-monospace, monospace", wordBreak: "break-all" }}>
-              {slugExibido}
-            </div>
+            <div style={{ fontSize: 12, color: T.textDim, fontStyle: "italic" }}>Carregando...</div>
           </div>
-          <button
-            onClick={() => { navigator.clipboard.writeText(slugExibido); }}
-            style={{
-              fontSize: 10, fontWeight: 700, padding: "5px 12px", borderRadius: 5,
-              background: T.surfaceAlt, border: `1px solid ${T.border}`,
-              color: T.textMid, cursor: "pointer", fontFamily: "inherit",
-              textTransform: "uppercase", letterSpacing: "0.04em", flexShrink: 0,
-            }}
-          >Copiar</button>
-        </div>
+        ) : slugAusente ? (
+          <div style={{
+            background: T.yellowDim, border: `1px solid ${T.yellow}44`,
+            borderRadius: 8, padding: "14px 16px", marginBottom: 14,
+          }}>
+            <div style={{ fontSize: 12, color: T.yellow, marginBottom: 10, lineHeight: 1.6 }}>
+              ⚠️ Esta empresa ainda não possui um slug configurado. Gere agora para ativar os formulários de captura.
+            </div>
+            <button
+              onClick={gerarPrimeiroSlug}
+              disabled={gerandoSlug}
+              style={{
+                fontSize: 11, fontWeight: 700, padding: "8px 16px", borderRadius: 6,
+                background: gerandoSlug ? T.surfaceAlt : T.gold,
+                color: gerandoSlug ? T.textMid : "#000",
+                border: "none", cursor: gerandoSlug ? "not-allowed" : "pointer",
+                fontFamily: "inherit", textTransform: "uppercase", letterSpacing: "0.04em",
+              }}
+            >{gerandoSlug ? "Gerando..." : "✦ Gerar meu primeiro slug"}</button>
+          </div>
+        ) : (
+          <div style={{
+            background: T.bg, border: `1px solid ${T.borderAlt}`,
+            borderRadius: 8, padding: "12px 16px", marginBottom: 14,
+            display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap",
+          }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 10, color: T.textDim, marginBottom: 4, textTransform: "uppercase", letterSpacing: "0.08em" }}>Slug público</div>
+              <div style={{ fontSize: 13, fontWeight: 600, color: T.gold, fontFamily: "ui-monospace, monospace", wordBreak: "break-all" }}>
+                {slugExibido}
+              </div>
+            </div>
+            <button
+              onClick={() => { navigator.clipboard.writeText(slugExibido); }}
+              style={{
+                fontSize: 10, fontWeight: 700, padding: "5px 12px", borderRadius: 5,
+                background: T.surfaceAlt, border: `1px solid ${T.border}`,
+                color: T.textMid, cursor: "pointer", fontFamily: "inherit",
+                textTransform: "uppercase", letterSpacing: "0.04em", flexShrink: 0,
+              }}
+            >Copiar</button>
+          </div>
+        )}
 
         <p style={{ fontSize: 12, color: T.textMid, lineHeight: 1.7, margin: "0 0 16px" }}>
           Este slug é o identificador público da sua empresa nos formulários de captura. Ele é usado no lugar do seu ID interno — mantendo seus dados protegidos.
