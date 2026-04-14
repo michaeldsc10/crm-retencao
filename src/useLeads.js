@@ -14,7 +14,7 @@
 // Sem nova coleção, sem nova config de Firebase.
 
 import { useState, useEffect } from "react";
-import { doc, onSnapshot, updateDoc, arrayUnion, arrayRemove } from "firebase/firestore";
+import { doc, onSnapshot, updateDoc, arrayUnion, arrayRemove, getDoc } from "firebase/firestore";
 import { db } from "./firebase";
 
 // ─── Scoring de leads (qualificação por engajamento) ─────────────────────────
@@ -237,10 +237,10 @@ export function useLeads(empresaId) {
 }
 
 // ─── Ações de escrita no Firestore ────────────────────────────────────────────
-// Funções standalone (não dentro do hook) para manter o padrão do projeto.
+// Padrão: getDoc → modificar array em memória por id → updateDoc.
+// Evita arrayRemove/arrayUnion com objetos complexos, que exige match exato
+// e duplica o lead quando qualquer campo difere.
 
-// Remove campos calculados pelo enriquecerLeads antes de comparar/salvar no Firestore.
-// O arrayRemove exige match exato — se o objeto tiver campos extras, não remove nada.
 const CAMPOS_CALCULADOS = [
   "score", "scoreBreakdown", "temperatura",
   "ultimaAtividade", "diasSemAtividade", "utmSource", "utmCampanha",
@@ -252,34 +252,38 @@ function stripCalculados(lead) {
   return limpo;
 }
 
+async function lerLeads(empresaId) {
+  const snap = await getDoc(doc(db, "dados", empresaId));
+  return snap.exists() ? (snap.data().leads || []) : [];
+}
+
 /**
  * Adiciona um novo lead ao array leads do doc da empresa.
- * Chamado pelo formulário de captação ou pelo tracker.
  */
 export async function adicionarLead(empresaId, dadosLead) {
   const ref = doc(db, "dados", empresaId);
   const novoLead = {
-    id:          crypto.randomUUID(),
-    nome:        dadosLead.nome || "",
-    email:       dadosLead.email || "",
-    telefone:    dadosLead.telefone || "",
-    empresa:     dadosLead.empresa || "",
-    cargo:       dadosLead.cargo || "",
-    status:      "novo",
+    id:           crypto.randomUUID(),
+    nome:         dadosLead.nome || "",
+    email:        dadosLead.email || "",
+    telefone:     dadosLead.telefone || "",
+    empresa:      dadosLead.empresa || "",
+    cargo:        dadosLead.cargo || "",
+    status:       "novo",
     utm_source:   dadosLead.utm_source   || null,
     utm_campaign: dadosLead.utm_campaign || null,
     utm_medium:   dadosLead.utm_medium   || null,
     landingPage:  dadosLead.landingPage  || null,
     eventos: [{
-      id:        crypto.randomUUID(),
-      tipo:      "form_submit",
-      url:       dadosLead.landingPage || null,
-      utm_source:   dadosLead.utm_source   || null,
-      utm_campaign: dadosLead.utm_campaign || null,
-      criadoEm:  new Date().toISOString(),
+      id:          crypto.randomUUID(),
+      tipo:        "form_submit",
+      url:         dadosLead.landingPage  || null,
+      utm_source:  dadosLead.utm_source   || null,
+      utm_campaign:dadosLead.utm_campaign || null,
+      criadoEm:    new Date().toISOString(),
     }],
     automacoesDisparadas: [],
-    criadoEm:    new Date().toISOString(),
+    criadoEm:     new Date().toISOString(),
     atualizadoEm: new Date().toISOString(),
   };
 
@@ -289,53 +293,55 @@ export async function adicionarLead(empresaId, dadosLead) {
 
 /**
  * Atualiza o status de um lead (ex: novo → qualificado).
- * Substitui o item no array — padrão do Firestore para arrays de objetos.
+ * Usa read-modify-write por id para evitar duplicação.
  */
 export async function atualizarStatusLead(empresaId, leadAtual, novoStatus) {
-  const ref = doc(db, "dados", empresaId);
-  const leadAtualizado = {
-    ...leadAtual,
-    status: novoStatus,
-    atualizadoEm: new Date().toISOString(),
-    // Remove campos calculados antes de salvar
-    score: undefined,
-    scoreBreakdown: undefined,
-    temperatura: undefined,
-    ultimaAtividade: undefined,
-    diasSemAtividade: undefined,
-    utmSource: undefined,
-    utmCampanha: undefined,
-  };
-  // Remove undefined
-  Object.keys(leadAtualizado).forEach(k => leadAtualizado[k] === undefined && delete leadAtualizado[k]);
+  const ref  = doc(db, "dados", empresaId);
+  const leads = await lerLeads(empresaId);
 
-  await updateDoc(ref, { leads: arrayRemove(stripCalculados(leadAtual)) });
-  await updateDoc(ref, { leads: arrayUnion(leadAtualizado) });
+  const leadsAtualizados = leads.map(l =>
+    l.id === leadAtual.id
+      ? { ...stripCalculados(l), status: novoStatus, atualizadoEm: new Date().toISOString() }
+      : l
+  );
+
+  await updateDoc(ref, { leads: leadsAtualizados });
 }
 
 /**
  * Adiciona um evento ao array eventos de um lead específico.
+ * Usa read-modify-write por id para evitar duplicação.
  */
 export async function registrarEventoLead(empresaId, leadAtual, evento) {
-  const ref = doc(db, "dados", empresaId);
+  const ref  = doc(db, "dados", empresaId);
+  const leads = await lerLeads(empresaId);
+
   const novoEvento = {
     id:       crypto.randomUUID(),
     criadoEm: new Date().toISOString(),
     ...evento,
   };
 
-  const leadAtualizado = {
-    ...leadAtual,
-    eventos: [...(leadAtual.eventos || []), novoEvento],
-    atualizadoEm: new Date().toISOString(),
-  };
+  const leadsAtualizados = leads.map(l =>
+    l.id === leadAtual.id
+      ? {
+          ...stripCalculados(l),
+          eventos:      [...(l.eventos || []), novoEvento],
+          atualizadoEm: new Date().toISOString(),
+        }
+      : l
+  );
 
-  // Remove campos calculados
-  ["score","scoreBreakdown","temperatura","ultimaAtividade","diasSemAtividade","utmSource","utmCampanha"]
-    .forEach(k => delete leadAtualizado[k]);
+  await updateDoc(ref, { leads: leadsAtualizados });
+}
 
-  await updateDoc(ref, { leads: arrayRemove(stripCalculados(leadAtual)) });
-  await updateDoc(ref, { leads: arrayUnion(leadAtualizado) });
+/**
+ * Remove um lead pelo id.
+ */
+export async function removerLead(empresaId, leadId) {
+  const ref  = doc(db, "dados", empresaId);
+  const leads = await lerLeads(empresaId);
+  await updateDoc(ref, { leads: leads.filter(l => l.id !== leadId) });
 }
 
 /**
