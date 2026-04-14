@@ -6,15 +6,12 @@
 //   - empresaId como chave de isolamento
 //
 // Estrutura no Firestore:
-//   dados/{empresaId}/leads        → array de leads (igual a clientes/vendas)
-//   dados/{empresaId}/leadEventos  → array de eventos de comportamento
-//   dados/{empresaId}/automacoes   → array de regras de automação
+//   dadosCRM/{empresaId}  → leads, automacoes, leadEventos, config (slug)
 //
-// Tudo dentro do mesmo doc que o CRM já usa: dados/{empresaId}
-// Sem nova coleção, sem nova config de Firebase.
+// Separado de dados/{empresaId} que pertence ao Assent Gestão (clientes, vendas, serviços).
 
 import { useState, useEffect } from "react";
-import { doc, onSnapshot, updateDoc, arrayUnion, arrayRemove, getDoc } from "firebase/firestore";
+import { doc, onSnapshot, updateDoc, setDoc, arrayUnion, arrayRemove, getDoc } from "firebase/firestore";
 import { db } from "./firebase";
 
 // ─── Scoring de leads (qualificação por engajamento) ─────────────────────────
@@ -191,25 +188,27 @@ export function useLeads(empresaId) {
     metricas: null,
     automacoes: [],
     acoesDisparadas: [],
+    config: null,
   });
 
   useEffect(() => {
     if (!empresaId) return;
 
-    // Usa o mesmo doc do CRM: dados/{empresaId}
-    const ref = doc(db, "dados", empresaId);
+    const ref = doc(db, "dadosCRM", empresaId);
 
     const unsub = onSnapshot(
       ref,
       (snap) => {
         if (!snap.exists()) {
-          setEstado(s => ({ ...s, carregando: false, erro: "Empresa não encontrada." }));
+          // Documento ainda não existe — estado inicial limpo, sem erro
+          setEstado(s => ({ ...s, carregando: false, leads: [], automacoes: [], config: {} }));
           return;
         }
 
         const dados = snap.data();
         const leads      = dados.leads       || [];
         const automacoes = dados.automacoes  || [];
+        const config     = dados.config      || {};
 
         const leadsEnriquecidos = enriquecerLeads(leads);
         const metricas          = calcularMetricasLeads(leadsEnriquecidos);
@@ -222,6 +221,7 @@ export function useLeads(empresaId) {
           metricas,
           automacoes,
           acoesDisparadas,
+          config,
         });
       },
       (err) => {
@@ -237,9 +237,9 @@ export function useLeads(empresaId) {
 }
 
 // ─── Ações de escrita no Firestore ────────────────────────────────────────────
-// Padrão: getDoc → modificar array em memória por id → updateDoc.
-// Evita arrayRemove/arrayUnion com objetos complexos, que exige match exato
-// e duplica o lead quando qualquer campo difere.
+// Padrão: getDoc → modificar array em memória por id → setDoc merge.
+// setDoc com merge cria o documento se não existir — seguro para novos empresaIds.
+// Evita arrayRemove/arrayUnion com objetos complexos que exige match exato.
 
 const CAMPOS_CALCULADOS = [
   "score", "scoreBreakdown", "temperatura",
@@ -253,15 +253,20 @@ function stripCalculados(lead) {
 }
 
 async function lerLeads(empresaId) {
-  const snap = await getDoc(doc(db, "dados", empresaId));
+  const snap = await getDoc(doc(db, "dadosCRM", empresaId));
   return snap.exists() ? (snap.data().leads || []) : [];
 }
 
+async function lerAutomacoes(empresaId) {
+  const snap = await getDoc(doc(db, "dadosCRM", empresaId));
+  return snap.exists() ? (snap.data().automacoes || []) : [];
+}
+
 /**
- * Adiciona um novo lead ao array leads do doc da empresa.
+ * Adiciona um novo lead. Usa setDoc merge para criar dadosCRM se não existir ainda.
  */
 export async function adicionarLead(empresaId, dadosLead) {
-  const ref = doc(db, "dados", empresaId);
+  const leads = await lerLeads(empresaId);
   const novoLead = {
     id:           crypto.randomUUID(),
     nome:         dadosLead.nome || "",
@@ -275,80 +280,63 @@ export async function adicionarLead(empresaId, dadosLead) {
     utm_medium:   dadosLead.utm_medium   || null,
     landingPage:  dadosLead.landingPage  || null,
     eventos: [{
-      id:          crypto.randomUUID(),
-      tipo:        "form_submit",
-      url:         dadosLead.landingPage  || null,
-      utm_source:  dadosLead.utm_source   || null,
-      utm_campaign:dadosLead.utm_campaign || null,
-      criadoEm:    new Date().toISOString(),
+      id:           crypto.randomUUID(),
+      tipo:         "form_submit",
+      url:          dadosLead.landingPage  || null,
+      utm_source:   dadosLead.utm_source   || null,
+      utm_campaign: dadosLead.utm_campaign || null,
+      criadoEm:     new Date().toISOString(),
     }],
     automacoesDisparadas: [],
     criadoEm:     new Date().toISOString(),
     atualizadoEm: new Date().toISOString(),
   };
 
-  await updateDoc(ref, { leads: arrayUnion(novoLead) });
+  await setDoc(doc(db, "dadosCRM", empresaId), { leads: [...leads, novoLead] }, { merge: true });
   return novoLead;
 }
 
 /**
- * Atualiza o status de um lead (ex: novo → qualificado).
- * Usa read-modify-write por id para evitar duplicação.
+ * Atualiza o status de um lead. Read-modify-write por id.
  */
 export async function atualizarStatusLead(empresaId, leadAtual, novoStatus) {
-  const ref  = doc(db, "dados", empresaId);
   const leads = await lerLeads(empresaId);
-
   const leadsAtualizados = leads.map(l =>
     l.id === leadAtual.id
       ? { ...stripCalculados(l), status: novoStatus, atualizadoEm: new Date().toISOString() }
       : l
   );
-
-  await updateDoc(ref, { leads: leadsAtualizados });
+  await setDoc(doc(db, "dadosCRM", empresaId), { leads: leadsAtualizados }, { merge: true });
 }
 
 /**
- * Adiciona um evento ao array eventos de um lead específico.
- * Usa read-modify-write por id para evitar duplicação.
+ * Adiciona um evento a um lead. Read-modify-write por id.
  */
 export async function registrarEventoLead(empresaId, leadAtual, evento) {
-  const ref  = doc(db, "dados", empresaId);
   const leads = await lerLeads(empresaId);
-
-  const novoEvento = {
-    id:       crypto.randomUUID(),
-    criadoEm: new Date().toISOString(),
-    ...evento,
-  };
+  const novoEvento = { id: crypto.randomUUID(), criadoEm: new Date().toISOString(), ...evento };
 
   const leadsAtualizados = leads.map(l =>
     l.id === leadAtual.id
-      ? {
-          ...stripCalculados(l),
-          eventos:      [...(l.eventos || []), novoEvento],
-          atualizadoEm: new Date().toISOString(),
-        }
+      ? { ...stripCalculados(l), eventos: [...(l.eventos || []), novoEvento], atualizadoEm: new Date().toISOString() }
       : l
   );
-
-  await updateDoc(ref, { leads: leadsAtualizados });
+  await setDoc(doc(db, "dadosCRM", empresaId), { leads: leadsAtualizados }, { merge: true });
 }
 
 /**
  * Remove um lead pelo id.
  */
 export async function removerLead(empresaId, leadId) {
-  const ref  = doc(db, "dados", empresaId);
   const leads = await lerLeads(empresaId);
-  await updateDoc(ref, { leads: leads.filter(l => l.id !== leadId) });
+  await setDoc(doc(db, "dadosCRM", empresaId), { leads: leads.filter(l => l.id !== leadId) }, { merge: true });
 }
 
 /**
- * Cria ou substitui uma automação no array automacoes.
+ * Cria ou edita uma automação. Read-modify-write por id.
  */
 export async function salvarAutomacao(empresaId, automacao, antiga = null) {
-  const ref = doc(db, "dados", empresaId);
+  const automacoes = await lerAutomacoes(empresaId);
   const novaAuto = {
     id:           automacao.id || crypto.randomUUID(),
     nome:         automacao.nome,
@@ -360,17 +348,24 @@ export async function salvarAutomacao(empresaId, automacao, antiga = null) {
     criadoEm:     automacao.criadoEm || new Date().toISOString(),
   };
 
-  if (antiga) await updateDoc(ref, { automacoes: arrayRemove(antiga) });
-  await updateDoc(ref, { automacoes: arrayUnion(novaAuto) });
+  const atualizadas = antiga
+    ? automacoes.map(a => a.id === antiga.id ? novaAuto : a)
+    : [...automacoes, novaAuto];
+
+  await setDoc(doc(db, "dadosCRM", empresaId), { automacoes: atualizadas }, { merge: true });
   return novaAuto;
 }
 
 /**
- * Remove uma automação.
+ * Remove uma automação pelo id.
  */
 export async function removerAutomacao(empresaId, automacao) {
-  const ref = doc(db, "dados", empresaId);
-  await updateDoc(ref, { automacoes: arrayRemove(automacao) });
+  const automacoes = await lerAutomacoes(empresaId);
+  await setDoc(
+    doc(db, "dadosCRM", empresaId),
+    { automacoes: automacoes.filter(a => a.id !== automacao.id) },
+    { merge: true }
+  );
 }
 
 // ─── Prompt IA para leads ─────────────────────────────────────────────────────
