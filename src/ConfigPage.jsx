@@ -4,8 +4,8 @@
 // Exibe: slug público, snippets de captura (HTML/React/API), botão regenerar slug
 // e modal com guia passo a passo do Zapier.
 
-import { useState } from "react";
-import { doc, getDoc, setDoc, updateDoc } from "firebase/firestore";
+import { useState, useEffect } from "react";
+import { doc, setDoc, onSnapshot } from "firebase/firestore";
 import { db } from "./firebase";
 import { SNIPPET_HTML, SNIPPET_REACT, SNIPPET_API } from "./capturaSnippets";
 
@@ -303,40 +303,52 @@ function ModalZapier({ T, onFechar }) {
 
 // ─── ConfigPage principal ─────────────────────────────────────────────────────
 export default function ConfigPage({ T, bp, empresaId, config }) {
-  const slug = config?.slugPublico || "";
   const [snippetAtivo, setSnippetAtivo] = useState("html");
   const [regenerando, setRegenerando]   = useState(false);
-  const [slugAtual, setSlugAtual]       = useState(slug);
   const [confirmarRegen, setConfirmarRegen] = useState(false);
   const [zapierAberto, setZapierAberto] = useState(false);
   const [feedbackRegen, setFeedbackRegen] = useState(null); // "ok" | "erro"
   const [gerandoSlug, setGerandoSlug]   = useState(false);
 
+  // Slug vem do dadosCRM — subscrição própria independente do useCRM
+  const [crmConfig, setCrmConfig] = useState(null); // null = carregando
+
+  useEffect(() => {
+    if (!empresaId) return;
+    const unsub = onSnapshot(doc(db, "dadosCRM", empresaId), (snap) => {
+      setCrmConfig(snap.exists() ? (snap.data().config || {}) : {});
+    });
+    return () => unsub();
+  }, [empresaId]);
+
   const cfUrl = "https://southamerica-east1-assent-2b945.cloudfunctions.net/capturarLead";
 
-  // Distingue três estados: ainda carregando, slug ausente, slug presente
-  const slugCarregando = config === null;
-  const slugAusente    = config !== null && !config?.slugPublico && !slugAtual;
-  const slugExibido    = slugAtual || slug || "";
+  const slugCarregando = crmConfig === null;
+  const slugExibido    = crmConfig?.slugPublico || "";
+  const slugAusente    = !slugCarregando && !slugExibido;
+
+  // nomeEmpresa vem do AG (config prop do useCRM) para gerar o slug base
+  const nomeEmpresa = config?.nomeEmpresa || "";
+
+  async function salvarSlugNoCRM(novoSlug) {
+    // Grava na coleção slugs (mapeamento público slug → empresaId)
+    await setDoc(doc(db, "slugs", novoSlug), {
+      empresaId,
+      nomeEmpresa,
+      criadoEm: new Date().toISOString(),
+    });
+    // Grava no dadosCRM da empresa
+    await setDoc(doc(db, "dadosCRM", empresaId), {
+      config: { slugPublico: novoSlug },
+    }, { merge: true });
+  }
 
   async function gerarPrimeiroSlug() {
     if (!empresaId) return;
     setGerandoSlug(true);
     setFeedbackRegen(null);
     try {
-      const novoSlug = gerarSlug(config?.nomeEmpresa || "");
-
-      await setDoc(doc(db, "slugs", novoSlug), {
-        empresaId,
-        nomeEmpresa: config?.nomeEmpresa || "",
-        criadoEm: new Date().toISOString(),
-      });
-
-      await updateDoc(doc(db, "dados", empresaId), {
-        "config.slugPublico": novoSlug,
-      });
-
-      setSlugAtual(novoSlug);
+      await salvarSlugNoCRM(gerarSlug(nomeEmpresa));
       setFeedbackRegen("ok");
       setTimeout(() => setFeedbackRegen(null), 3000);
     } catch (err) {
@@ -348,25 +360,11 @@ export default function ConfigPage({ T, bp, empresaId, config }) {
   }
 
   async function regenerarSlug() {
-    if (!empresaId || !config?.nomeEmpresa) return;
+    if (!empresaId) return;
     setRegenerando(true);
     setFeedbackRegen(null);
     try {
-      const novoSlug = gerarSlug(config.nomeEmpresa);
-
-      // Cria novo documento em slugs/
-      await setDoc(doc(db, "slugs", novoSlug), {
-        empresaId,
-        nomeEmpresa: config.nomeEmpresa,
-        criadoEm: new Date().toISOString(),
-      });
-
-      // Atualiza config da empresa com o novo slug
-      await updateDoc(doc(db, "dados", empresaId), {
-        "config.slugPublico": novoSlug,
-      });
-
-      setSlugAtual(novoSlug);
+      await salvarSlugNoCRM(gerarSlug(nomeEmpresa));
       setConfirmarRegen(false);
       setFeedbackRegen("ok");
       setTimeout(() => setFeedbackRegen(null), 3000);
