@@ -87,63 +87,7 @@ function ConfigurarRadar({ T, empresaId }) {
       background: T.surface, border: `1px solid ${T.border}`,
       borderRadius: 10, padding: "20px 22px", marginBottom: 16,
     }}>
-      <SecaoTitulo T={T}>Configurar Radar</SecaoTitulo>
-      <p style={{ fontSize: 12, color: T.textMid, lineHeight: 1.7, margin: "0 0 20px" }}>
-        Define quando um cliente entra no Radar do dia. O sistema usa dois critérios: dias sem aparecer (para clientes com poucas compras) e multiplicador da frequência média (para clientes com histórico).
-      </p>
-
-      <div style={{
-        display: "grid",
-        gridTemplateColumns: "1fr 1fr",
-        gap: "0 28px",
-      }}>
-        <div>
-          <p style={{ fontSize: 10, fontWeight: 700, color: T.textDim, letterSpacing: "0.10em", textTransform: "uppercase", marginBottom: 14 }}>
-            Sem histórico de frequência
-          </p>
-          {campo("diasMedio", "⚠️ Atenção a partir de", "Dias ausente para marcar como Atenção.", 1, 365)}
-          {campo("diasAlto",  "🔴 Risco alto a partir de", "Dias ausente para marcar como Risco alto.", 1, 365)}
-        </div>
-
-        <div>
-          <p style={{ fontSize: 10, fontWeight: 700, color: T.textDim, letterSpacing: "0.10em", textTransform: "uppercase", marginBottom: 14 }}>
-            Com histórico de frequência
-          </p>
-          {campo("multMedio", "⚠️ Atenção acima de", "Multiplicador da frequência média para Atenção. Ex: 1.5× = cliente que volta a cada 10 dias está ausente há 15+.", 0.1, 20)}
-          {campo("multAlto",  "🔴 Risco alto acima de", "Multiplicador da frequência média para Risco alto.", 0.1, 20)}
-        </div>
-      </div>
-
-      <div style={{ display: "flex", alignItems: "center", gap: 12, marginTop: 8, paddingTop: 16, borderTop: `1px solid ${T.border}` }}>
-        <button
-          onClick={salvar}
-          disabled={salvando}
-          style={{
-            fontSize: 11, fontWeight: 700, padding: "8px 20px", borderRadius: 7,
-            background: salvando ? T.surfaceAlt : T.gold,
-            color: salvando ? T.textMid : "#000",
-            border: "none", cursor: salvando ? "not-allowed" : "pointer",
-            fontFamily: "inherit", textTransform: "uppercase", letterSpacing: "0.04em",
-            transition: "all 0.15s",
-          }}
-        >{salvando ? "Salvando..." : "Salvar configurações"}</button>
-
-        <button
-          onClick={() => setValores({ ...RADAR_PADRAO })}
-          style={{
-            fontSize: 11, padding: "8px 14px", borderRadius: 7,
-            background: "none", border: `1px solid ${T.border}`,
-            color: T.textMid, cursor: "pointer", fontFamily: "inherit",
-          }}
-        >Restaurar padrão</button>
-
-        {feedback === "ok"   && <span style={{ fontSize: 12, color: T.green }}>✓ Salvo com sucesso.</span>}
-        {feedback === "erro" && <span style={{ fontSize: 12, color: T.red }}>Erro ao salvar. Tente novamente.</span>}
-      </div>
-    </div>
-  );
-}
-
+      
 // ─── Helper: gera novo slug ───────────────────────────────────────────────────
 function gerarSlug(nomeEmpresa = "") {
   const base = nomeEmpresa
