@@ -872,6 +872,11 @@ export default function LeadsPage({ T, bp, empresaId, config }) {
   const { leads, metricas, automacoes, carregando, erro, acoesDisparadas } = useLeads(empresaId);
   const [subAba, setSubAba] = useState("lista");     // "lista" | "automacoes"
   const [leadSelecionado, setLeadSelecionado] = useState(null);
+
+  // Mantém o painel de detalhe sempre sincronizado com o snapshot do Firestore
+  const leadAtualizado = leadSelecionado
+    ? (leads.find(l => l.id === leadSelecionado.id) || leadSelecionado)
+    : null;
   const [busca, setBusca] = useState("");
   const [filtroTemp, setFiltroTemp] = useState("");
   const [filtroStatus, setFiltroStatus] = useState("");
@@ -988,9 +993,9 @@ export default function LeadsPage({ T, bp, empresaId, config }) {
       )}
 
       {/* Painel lateral de detalhe */}
-      {leadSelecionado && (
+      {leadAtualizado && (
         <DetalheLeadPanel
-          lead={leadSelecionado}
+          lead={leadAtualizado}
           empresaId={empresaId}
           empresaNome={config?.empresaNome}
           T={T}
