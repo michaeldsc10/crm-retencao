@@ -266,7 +266,7 @@ function AssistenteIA({ metricas, clientes, config, T }) {
   const [pensando, setPensando] = useState(false);
 
   const contexto = metricas
-    ? `Empresa: ${config?.empresaNome || "não identificada"}.
+    ? `Empresa: ${config?.empresa?.nomeEmpresa || "não identificada"}.
 Clientes ativos: ${metricas.totalClientes}.
 Em risco alto: ${metricas.emRisco}.
 Dormentes (+60d): ${metricas.dormentes}.
@@ -282,7 +282,7 @@ Clientes em risco: ${clientes.filter((c) => c.risco === "alto").map((c) => `${c.
     setPensando(true); setResposta(null);
     try {
       const r = await chamarIA(
-        `Você é um consultor especialista em retenção de clientes para pequenos negócios brasileiros, trabalhando para "${config?.empresaNome || "esta empresa"}".
+        `Você é um consultor especialista em retenção de clientes para pequenos negócios brasileiros, trabalhando para "${config?.empresa?.nomeEmpresa || "esta empresa"}".
 Você tem acesso aos dados reais dos clientes e deve dar conselhos práticos, diretos e específicos — nunca genéricos.
 Dados atuais do negócio:\n${contexto}
 Regras:
@@ -457,7 +457,13 @@ function CardsClientes({ clientes, T, onSelecionar }) {
 // ─── Modal Histórico CRM ──────────────────────────────────────────────────────
 function ModalHistoricoCRM({ cliente, vendas, T, onClose }) {
   if (!cliente) return null;
-  const historico = vendas.filter((v) => v.cliente === cliente.nome).sort((a, b) => new Date(b.data) - new Date(a.data));
+  // BUG CORRIGIDO: fuzzy match de nome + parse correto de Timestamp Firestore
+  function toDate(val) { return val?.toDate ? val.toDate() : new Date(val); }
+  function matchNome(a = "", b = "") {
+    const x = a.trim().toLowerCase(), y = b.trim().toLowerCase();
+    return x === y || y.startsWith(x) || x.startsWith(y);
+  }
+  const historico = vendas.filter((v) => matchNome(v.cliente, cliente.nome)).sort((a, b) => toDate(b.data) - toDate(a.data));
   const faturamentoTotal = historico.reduce((acc, v) => acc + (v.total || 0), 0);
 
   return (
@@ -483,7 +489,7 @@ function ModalHistoricoCRM({ cliente, vendas, T, onClose }) {
                 <span style={{ fontSize: "13px", fontWeight: "700", color: T.gold }}>{formatarReal(v.total)}</span>
               </div>
               <div style={{ fontSize: "14px", color: T.text, fontWeight: "500" }}>
-                {v.itens?.map((item) => item.produto).join(", ") || "Serviço"}
+                {v.itens?.map((item) => item.nome || item.produto).join(", ") || "Serviço"}
               </div>
             </div>
           ))}
@@ -657,7 +663,7 @@ export default function App() {
           {sidebarAberta || bp.isMobile ? (
             <>
               <div style={{ fontSize: 11, fontWeight: 600, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                {config?.empresaNome || "Empresa"}
+                {config?.empresa?.nomeEmpresa || "Empresa"}
               </div>
               <div style={{ fontSize: 10, color: T.textDim, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{usuario.email}</div>
               <button onClick={() => signOut(auth)} style={{ marginTop: 4, fontSize: 10, color: T.textDim, background: "none", border: `1px solid ${T.border}`, cursor: "pointer", padding: "5px 10px", borderRadius: 5, fontFamily: "inherit", alignSelf: "flex-start" }}>Sair</button>
@@ -726,7 +732,7 @@ export default function App() {
               </div>
               {insights.length === 0
                 ? <div style={{ textAlign: "center", padding: "48px 0", color: T.textDim, fontSize: 13, border: `1px dashed ${T.border}`, borderRadius: 10 }}>Nenhum insight gerado ainda.</div>
-                : insights.map((ins) => <InsightCard key={ins.id} insight={ins} empresaNome={config?.empresaNome} T={T} />)
+                : insights.map((ins) => <InsightCard key={ins.id} insight={ins} empresaNome={config?.empresa?.nomeEmpresa} T={T} />)
               }
             </>
           )}
