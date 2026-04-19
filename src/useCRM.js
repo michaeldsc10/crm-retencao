@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { doc, onSnapshot } from "firebase/firestore";
+import { doc, collection, onSnapshot } from "firebase/firestore";
 import { db } from "./firebase";
 
 // ─── Score de churn ───────────────────────────────────────────────────────────
@@ -24,24 +24,27 @@ function calcularScoreChurn(clientes = [], vendas = []) {
     if (vendasCliente.length >= 2) {
       const intervalos = [];
       for (let i = 1; i < vendasCliente.length; i++) {
-        intervalos.push((vendasCliente[i]._data - vendasCliente[i - 1]._data) / 86400000);
+        intervalos.push(
+          (vendasCliente[i]._data - vendasCliente[i - 1]._data) / 86400000
+        );
       }
-      frequenciaMedia = Math.round(intervalos.reduce((a, b) => a + b, 0) / intervalos.length);
+      frequenciaMedia = Math.round(
+        intervalos.reduce((a, b) => a + b, 0) / intervalos.length
+      );
     }
 
     const totalGasto = vendasCliente.reduce((acc, v) => acc + (v.total || 0), 0);
     const ticketMedio = Math.round(totalGasto / vendasCliente.length);
 
-    // Produto/serviço favorito
     const contagem = {};
     vendasCliente.forEach((v) =>
       (v.itens || []).forEach((i) => {
         contagem[i.produto] = (contagem[i.produto] || 0) + 1;
       })
     );
-    const [produtoFavorito] = Object.entries(contagem).sort((a, b) => b[1] - a[1])[0] || [];
+    const [produtoFavorito] =
+      Object.entries(contagem).sort((a, b) => b[1] - a[1])[0] || [];
 
-    // Score de risco
     const mult = frequenciaMedia ? diasAusente / frequenciaMedia : null;
     let risco = "baixo";
     if (mult !== null) {
@@ -92,18 +95,22 @@ function gerarInsights(clientesComScore, vendas = [], servicos = []) {
       });
     }
 
-    // Oportunidade de upsell
     const comprados = new Set(
-      vendas.filter((v) => v.cliente === c.nome).flatMap((v) => (v.itens || []).map((i) => i.produto))
+      vendas
+        .filter((v) => v.cliente === c.nome)
+        .flatMap((v) => (v.itens || []).map((i) => i.produto))
     );
+
     const catFav = (() => {
       const cc = {};
-      vendas.filter((v) => v.cliente === c.nome).forEach((v) =>
-        (v.itens || []).forEach((item) => {
-          const srv = servicos.find((s) => s.nome === item.produto);
-          if (srv?.categoria) cc[srv.categoria] = (cc[srv.categoria] || 0) + 1;
-        })
-      );
+      vendas
+        .filter((v) => v.cliente === c.nome)
+        .forEach((v) =>
+          (v.itens || []).forEach((item) => {
+            const srv = servicos.find((s) => s.nome === item.produto);
+            if (srv?.categoria) cc[srv.categoria] = (cc[srv.categoria] || 0) + 1;
+          })
+        );
       return Object.entries(cc).sort((a, b) => b[1] - a[1])[0]?.[0] || null;
     })();
 
@@ -141,13 +148,29 @@ function calcularMetricas(clientesComScore, vendas = []) {
     dormentes: com.filter((c) => c.diasAusente > 60).length,
     fieis: com.filter((c) => c.risco === "baixo" && c.totalCompras >= 2).length,
     novos: com.filter((c) => c.totalCompras === 1).length,
-    receitaEmRisco: com.filter((c) => c.risco === "alto").reduce((a, c) => a + (c.ticketMedio || 0), 0),
-    receitaRecente: vendas.filter((v) => new Date(v.data) >= trintaDias).reduce((a, v) => a + (v.total || 0), 0),
-    ticketGeral: com.length ? Math.round(com.reduce((a, c) => a + (c.ticketMedio || 0), 0) / com.length) : 0,
+    receitaEmRisco: com
+      .filter((c) => c.risco === "alto")
+      .reduce((a, c) => a + (c.ticketMedio || 0), 0),
+    receitaRecente: vendas
+      .filter((v) => new Date(v.data) >= trintaDias)
+      .reduce((a, v) => a + (v.total || 0), 0),
+    ticketGeral: com.length
+      ? Math.round(com.reduce((a, c) => a + (c.ticketMedio || 0), 0) / com.length)
+      : 0,
   };
 }
 
 // ─── Hook principal ───────────────────────────────────────────────────────────
+//
+// Estrutura esperada no Firestore (Assent Gestão):
+//
+//   users/{empresaId}                    ← documento raiz (contadores etc.)
+//   users/{empresaId}/clientes/{...}     ← subcoleção de clientes
+//   users/{empresaId}/vendas/{...}       ← subcoleção de vendas
+//   users/{empresaId}/servicos/{...}     ← subcoleção de serviços
+//   users/{empresaId}/config/geral       ← configurações da empresa
+//
+// ─────────────────────────────────────────────────────────────────────────────
 
 export function useCRM(empresaId) {
   const [estado, setEstado] = useState({
@@ -163,51 +186,122 @@ export function useCRM(empresaId) {
   useEffect(() => {
     if (!empresaId) return;
 
-    // ✅ MIGRAÇÃO: lê de "users/{uid}" (Assent 2.0) em vez de "dados/{uid}" (Assent antigo)
-    const ref = doc(db, "users", empresaId);
+    // Buffer compartilhado entre os listeners
+    const buffer = {
+      clientes: [],
+      vendas: [],
+      servicos: [],
+      config: {},
+    };
 
-    const unsub = onSnapshot(
-      ref,
-      (snap) => {
-        if (!snap.exists()) {
-          setEstado((s) => ({ ...s, carregando: false, erro: "Empresa não encontrada." }));
-          return;
-        }
+    // Controle de quais listeners já dispararam pelo menos uma vez
+    const pronto = {
+      clientes: false,
+      vendas: false,
+      servicos: false,
+      config: false,
+    };
 
-        const dados = snap.data();
+    // Só recalcula quando todos os listeners tiverem carregado
+    function recalcular() {
+      if (!pronto.clientes || !pronto.vendas || !pronto.servicos || !pronto.config) return;
 
-        // "servicos" no Assent 2.0 mantém o mesmo nome — nenhuma adaptação necessária.
-        // Se o Assent 2.0 usar "categoriasServico" para categorias, elas já estão
-        // embutidas nos objetos de serviço consultados via "servicos".
-        const { clientes = [], vendas = [], servicos = [], config = {} } = dados;
+      const clientesComScore = calcularScoreChurn(buffer.clientes, buffer.vendas);
+      const insights = gerarInsights(clientesComScore, buffer.vendas, buffer.servicos);
+      const metricas = calcularMetricas(clientesComScore, buffer.vendas);
 
-        const clientesComScore = calcularScoreChurn(clientes, vendas);
-        const insights = gerarInsights(clientesComScore, vendas, servicos);
-        const metricas = calcularMetricas(clientesComScore, vendas);
+      setEstado({
+        carregando: false,
+        erro: null,
+        dadosBrutos: { ...buffer },
+        clientes: clientesComScore,
+        insights,
+        metricas,
+        config: buffer.config,
+      });
+    }
 
-        setEstado({
+    function onErro(secao) {
+      return (err) => {
+        console.error(`[useCRM] Erro em "${secao}":`, err);
+        setEstado((s) => ({
+          ...s,
           carregando: false,
-          erro: null,
-          dadosBrutos: dados,
-          clientes: clientesComScore,
-          insights,
-          metricas,
-          config,
-        });
-      },
-      (err) => {
-        console.error(err);
-        setEstado((s) => ({ ...s, carregando: false, erro: "Erro ao conectar com o Firestore." }));
-      }
+          erro: `Erro ao carregar ${secao}.`,
+        }));
+      };
+    }
+
+    const unsubs = [];
+
+    // 1. Subcoleção: clientes
+    unsubs.push(
+      onSnapshot(
+        collection(db, "users", empresaId, "clientes"),
+        (snap) => {
+          buffer.clientes = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+          pronto.clientes = true;
+          recalcular();
+        },
+        onErro("clientes")
+      )
     );
 
-    return () => unsub();
+    // 2. Subcoleção: vendas
+    unsubs.push(
+      onSnapshot(
+        collection(db, "users", empresaId, "vendas"),
+        (snap) => {
+          buffer.vendas = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+          pronto.vendas = true;
+          recalcular();
+        },
+        onErro("vendas")
+      )
+    );
+
+    // 3. Subcoleção: servicos
+    unsubs.push(
+      onSnapshot(
+        collection(db, "users", empresaId, "servicos"),
+        (snap) => {
+          buffer.servicos = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+          pronto.servicos = true;
+          recalcular();
+        },
+        onErro("serviços")
+      )
+    );
+
+    // 4. Documento de config (users/{id}/config/geral)
+    unsubs.push(
+      onSnapshot(
+        doc(db, "users", empresaId, "config", "geral"),
+        (snap) => {
+          buffer.config = snap.exists() ? snap.data() : {};
+          pronto.config = true;
+          recalcular();
+        },
+        (err) => {
+          // Config não é crítica: marca como pronto mesmo sem dados
+          console.warn("[useCRM] Config não encontrada:", err);
+          pronto.config = true;
+          recalcular();
+        }
+      )
+    );
+
+    return () => unsubs.forEach((u) => u());
   }, [empresaId]);
 
   return estado;
 }
 
 // ─── Gerador de prompt para IA ────────────────────────────────────────────────
+//
+// Acesse o nome da empresa via: config?.empresa?.nomeEmpresa
+//
+// ─────────────────────────────────────────────────────────────────────────────
 
 export function montarPromptMensagem(insight, empresaNome) {
   const empresa = empresaNome || "nossa agência";
