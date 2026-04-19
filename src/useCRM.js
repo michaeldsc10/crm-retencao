@@ -1,17 +1,22 @@
 import { useState, useEffect } from "react";
-import { doc, collection, onSnapshot } from "firebase/firestore";
+import {
+  doc,
+  collection,
+  onSnapshot,
+  setDoc,
+  deleteDoc,
+  serverTimestamp,
+} from "firebase/firestore";
 import { db } from "./firebase";
 
 // ─── Helper: converte Timestamp do Firestore ou string para Date ──────────────
 function toDate(val) {
   if (!val) return new Date(0);
-  if (val?.toDate) return val.toDate(); // Firestore Timestamp
+  if (val?.toDate) return val.toDate();
   return new Date(val);
 }
 
 // ─── Helper: compara nome do cliente com tolerância a nomes parciais ──────────
-// BUG CORRIGIDO #3: vendas no Firestore usam "Ana Carolina" mas o cliente
-// se chama "Ana Carolina Soares". Matching exato quebrava tudo.
 function matchNomeCliente(vendaCliente = "", clienteNome = "") {
   const a = (vendaCliente || "").trim().toLowerCase();
   const b = (clienteNome || "").trim().toLowerCase();
@@ -19,16 +24,43 @@ function matchNomeCliente(vendaCliente = "", clienteNome = "") {
   return a === b || b.startsWith(a) || a.startsWith(b);
 }
 
-// ─── Score de churn ───────────────────────────────────────────────────────────
+// ─── Gera chave segura para ID de documento no Firestore ─────────────────────
+function chaveCliente(clienteId, clienteNome) {
+  if (clienteId) return clienteId;
+  return (clienteNome || "desconhecido")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9_-]/g, "_")
+    .slice(0, 80);
+}
 
+// ─── Ignorar cliente ──────────────────────────────────────────────────────────
+// Caminho: dadosCRM/{empresaId}/ignore/{chaveCliente}
+export async function ignorarCliente(empresaId, cliente) {
+  const chave = chaveCliente(cliente.id, cliente.nome);
+  await setDoc(doc(db, "dadosCRM", empresaId, "ignore", chave), {
+    clienteId:  cliente.id       || null,
+    nome:       cliente.nome     || "Desconhecido",
+    telefone:   cliente.telefone || null,
+    ignoradoEm: serverTimestamp(),
+  });
+}
+
+// ─── Reativar cliente ignorado ────────────────────────────────────────────────
+export async function reativarCliente(empresaId, clienteIgnorado) {
+  const chave = clienteIgnorado._docId ||
+    chaveCliente(clienteIgnorado.clienteId, clienteIgnorado.nome);
+  await deleteDoc(doc(db, "dadosCRM", empresaId, "ignore", chave));
+}
+
+// ─── Score de churn ───────────────────────────────────────────────────────────
 function calcularScoreChurn(clientes = [], vendas = []) {
   const hoje = new Date();
 
   return clientes.map((cliente) => {
     const vendasCliente = vendas
-      // BUG CORRIGIDO #3: era v.cliente === cliente.nome (strict)
       .filter((v) => matchNomeCliente(v.cliente, cliente.nome))
-      .map((v) => ({ ...v, _data: toDate(v.data) })) // BUG CORRIGIDO #2: Timestamp Firestore
+      .map((v) => ({ ...v, _data: toDate(v.data) }))
       .sort((a, b) => a._data - b._data);
 
     if (vendasCliente.length === 0) {
@@ -51,15 +83,14 @@ function calcularScoreChurn(clientes = [], vendas = []) {
       );
     }
 
-    // BUG CORRIGIDO #4: itens têm campo "nome", não "produto"
-    // BUG CORRIGIDO #5: v.total pode não existir; fallback para v.custoTotal
-    const totalGasto = vendasCliente.reduce((acc, v) => acc + (v.total ?? v.custoTotal ?? 0), 0);
+    const totalGasto = vendasCliente.reduce(
+      (acc, v) => acc + (v.total ?? v.custoTotal ?? 0), 0
+    );
     const ticketMedio = Math.round(totalGasto / vendasCliente.length);
 
     const contagem = {};
     vendasCliente.forEach((v) =>
       (v.itens || []).forEach((i) => {
-        // BUG CORRIGIDO #4: campo correto é i.nome (não i.produto)
         const nomeProduto = i.nome || i.produto || "Desconhecido";
         contagem[nomeProduto] = (contagem[nomeProduto] || 0) + 1;
       })
@@ -92,18 +123,23 @@ function calcularScoreChurn(clientes = [], vendas = []) {
 }
 
 // ─── Gerador de insights ──────────────────────────────────────────────────────
+function gerarInsights(clientesComScore, vendas = [], servicos = [], ignorados = []) {
+  const nomesIgnorados = new Set(
+    ignorados.map((ig) => (ig.nome || "").trim().toLowerCase())
+  );
 
-function gerarInsights(clientesComScore, vendas = [], servicos = []) {
   const insights = [];
 
   clientesComScore.forEach((c) => {
     if (c._semVendas) return;
+    if (nomesIgnorados.has((c.nome || "").trim().toLowerCase())) return;
 
     if (c.risco === "alto" || c.risco === "medio") {
       insights.push({
         id: `risco-${c.nome}`,
         tipo: "risco",
         prioridade: c.risco === "alto" ? 1 : 2,
+        clienteId: c.id || null,
         cliente: c.nome,
         telefone: c.telefone,
         diasAusente: c.diasAusente,
@@ -117,7 +153,6 @@ function gerarInsights(clientesComScore, vendas = [], servicos = []) {
       });
     }
 
-    // BUG CORRIGIDO #3 + #4: matching e campo nome
     const comprados = new Set(
       vendas
         .filter((v) => matchNomeCliente(v.cliente, c.nome))
@@ -146,6 +181,7 @@ function gerarInsights(clientesComScore, vendas = [], servicos = []) {
         id: `upsell-${c.nome}`,
         tipo: "oportunidade",
         prioridade: 3,
+        clienteId: c.id || null,
         cliente: c.nome,
         telefone: c.telefone,
         servico: naoComprado.nome,
@@ -160,7 +196,6 @@ function gerarInsights(clientesComScore, vendas = [], servicos = []) {
 }
 
 // ─── Métricas do painel ───────────────────────────────────────────────────────
-
 function calcularMetricas(clientesComScore, vendas = []) {
   const hoje = new Date();
   const trintaDias = new Date(hoje - 30 * 86400000);
@@ -175,7 +210,6 @@ function calcularMetricas(clientesComScore, vendas = []) {
     receitaEmRisco: com
       .filter((c) => c.risco === "alto")
       .reduce((a, c) => a + (c.ticketMedio || 0), 0),
-    // BUG CORRIGIDO #2 + #5: Timestamp e fallback de total
     receitaRecente: vendas
       .filter((v) => toDate(v.data) >= trintaDias)
       .reduce((a, v) => a + (v.total ?? v.custoTotal ?? 0), 0),
@@ -186,7 +220,6 @@ function calcularMetricas(clientesComScore, vendas = []) {
 }
 
 // ─── Hook principal ───────────────────────────────────────────────────────────
-
 export function useCRM(empresaId) {
   const [estado, setEstado] = useState({
     carregando: true,
@@ -196,30 +229,44 @@ export function useCRM(empresaId) {
     insights: [],
     metricas: null,
     config: null,
+    ignorados: [],
   });
 
   useEffect(() => {
     if (!empresaId) return;
 
     const buffer = {
-      clientes: [],
-      vendas: [],
-      servicos: [],
-      config: {},
+      clientes:  [],
+      vendas:    [],
+      servicos:  [],
+      config:    {},
+      ignorados: [],
     };
 
     const pronto = {
-      clientes: false,
-      vendas: false,
-      servicos: false,
-      config: false,
+      clientes:  false,
+      vendas:    false,
+      servicos:  false,
+      config:    false,
+      ignorados: false,
     };
 
     function recalcular() {
-      if (!pronto.clientes || !pronto.vendas || !pronto.servicos || !pronto.config) return;
+      if (
+        !pronto.clientes  ||
+        !pronto.vendas    ||
+        !pronto.servicos  ||
+        !pronto.config    ||
+        !pronto.ignorados
+      ) return;
 
       const clientesComScore = calcularScoreChurn(buffer.clientes, buffer.vendas);
-      const insights = gerarInsights(clientesComScore, buffer.vendas, buffer.servicos);
+      const insights = gerarInsights(
+        clientesComScore,
+        buffer.vendas,
+        buffer.servicos,
+        buffer.ignorados
+      );
       const metricas = calcularMetricas(clientesComScore, buffer.vendas);
 
       setEstado({
@@ -230,17 +277,14 @@ export function useCRM(empresaId) {
         insights,
         metricas,
         config: buffer.config,
+        ignorados: buffer.ignorados,
       });
     }
 
     function onErro(secao) {
       return (err) => {
         console.error(`[useCRM] Erro em "${secao}":`, err);
-        setEstado((s) => ({
-          ...s,
-          carregando: false,
-          erro: `Erro ao carregar ${secao}.`,
-        }));
+        setEstado((s) => ({ ...s, carregando: false, erro: `Erro ao carregar ${secao}.` }));
       };
     }
 
@@ -298,6 +342,24 @@ export function useCRM(empresaId) {
       )
     );
 
+    // ── Ignorados: dadosCRM/{empresaId}/ignore ──────────────────────────────
+    unsubs.push(
+      onSnapshot(
+        collection(db, "dadosCRM", empresaId, "ignore"),
+        (snap) => {
+          buffer.ignorados = snap.docs.map((d) => ({ _docId: d.id, ...d.data() }));
+          pronto.ignorados = true;
+          recalcular();
+        },
+        (err) => {
+          // Coleção pode ainda não existir: não bloqueia o sistema
+          console.warn("[useCRM] Coleção ignore não encontrada (normal na 1ª vez):", err);
+          pronto.ignorados = true;
+          recalcular();
+        }
+      )
+    );
+
     return () => unsubs.forEach((u) => u());
   }, [empresaId]);
 
@@ -305,12 +367,6 @@ export function useCRM(empresaId) {
 }
 
 // ─── Gerador de prompt para IA ────────────────────────────────────────────────
-//
-// BUG CORRIGIDO #1: nome da empresa está em config.empresa.nomeEmpresa,
-// não em config.empresaNome. Corrigido aqui e em App.jsx.
-//
-// ─────────────────────────────────────────────────────────────────────────────
-
 export function montarPromptMensagem(insight, empresaNome) {
   const empresa = empresaNome || "nossa agência";
 
