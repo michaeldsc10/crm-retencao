@@ -137,8 +137,7 @@ function calcularMetricas(clientesComScore, vendas = []) {
 
   return {
     totalClientes: com.length,
-    // Alterado para somar os dois níveis que aparecem no Radar
-    emRisco: com.filter((c) => c.risco === "alto" || c.risco === "medio").length, 
+    emRisco: com.filter((c) => c.risco === "alto" || c.risco === "medio").length,
     dormentes: com.filter((c) => c.diasAusente > 60).length,
     fieis: com.filter((c) => c.risco === "baixo" && c.totalCompras >= 2).length,
     novos: com.filter((c) => c.totalCompras === 1).length,
@@ -164,7 +163,9 @@ export function useCRM(empresaId) {
   useEffect(() => {
     if (!empresaId) return;
 
-    const ref = doc(db, "dados", empresaId);
+    // ✅ MIGRAÇÃO: lê de "users/{uid}" (Assent 2.0) em vez de "dados/{uid}" (Assent antigo)
+    const ref = doc(db, "users", empresaId);
+
     const unsub = onSnapshot(
       ref,
       (snap) => {
@@ -174,6 +175,10 @@ export function useCRM(empresaId) {
         }
 
         const dados = snap.data();
+
+        // "servicos" no Assent 2.0 mantém o mesmo nome — nenhuma adaptação necessária.
+        // Se o Assent 2.0 usar "categoriasServico" para categorias, elas já estão
+        // embutidas nos objetos de serviço consultados via "servicos".
         const { clientes = [], vendas = [], servicos = [], config = {} } = dados;
 
         const clientesComScore = calcularScoreChurn(clientes, vendas);
@@ -206,7 +211,7 @@ export function useCRM(empresaId) {
 
 export function montarPromptMensagem(insight, empresaNome) {
   const empresa = empresaNome || "nossa agência";
-  
+
   const system = `Você é um gestor de relacionamento da "${empresa}". 
   Sua missão é escrever uma mensagem de WhatsApp extremamente humana e curta (máximo 3 linhas).
   REGRAS:
