@@ -1,0 +1,76 @@
+@import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500&family=Cormorant+Garamond:ital,wght@0,400;0,600;1,400&family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=Inter:wght@400;500;600&display=swap');
+
+:root {
+  --color-black: #050505;
+  --color-gold: #3b82f6; /* Blue CRM Primary */
+  --color-gold-dark: #1d4ed8; /* Blue CRM Dark */
+  --color-gold-light: #60a5fa;
+  --color-text-gold: #60a5fa;
+  --color-gray-dark: #1f1f1f;
+  --color-gray-light: #333333;
+  --color-text-main: #ffffff;
+  --color-text-muted: #a0a0a0;
+
+  font-family: 'Inter', system-ui, sans-serif;
+  --font-serif: 'Playfair Display', serif;
+  --font-sans-alt: 'Montserrat', sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+
+  color-scheme: dark;
+  color: var(--color-text-main);
+  background-color: var(--color-black);
+
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  margin: 0;
+  display: flex;
+  place-items: center;
+  min-height: 100vh;
+  background-color: var(--color-black);
+}
+
+h1 {
+  font-size: 3.2em;
+  line-height: 1.1;
+}
+
+button {
+  border-radius: 8px;
+  border: 1px solid transparent;
+  padding: 0.6em 1.2em;
+  font-size: 1em;
+  font-weight: 500;
+  font-family: inherit;
+  background-color: var(--color-gray-dark);
+  cursor: pointer;
+  transition: border-color 0.25s, transform 0.2s;
+}
+
+button:hover {
+  border-color: var(--color-gold);
+}
+
+button:focus,
+button:focus-visible {
+  outline: 4px auto -webkit-focus-ring-color;
+}
+
+@media (prefers-color-scheme: light) {
+  /* Enforce dark mode based on requirements */
+  :root {
+    color: var(--color-text-main);
+    background-color: var(--color-black);
+  }
+}

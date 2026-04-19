@@ -1,0 +1,415 @@
+#root {
+  width: 100vw;
+  height: 100vh;
+  margin: 0;
+  padding: 0;
+}
+
+.login-container {
+  display: flex;
+  width: 100%;
+  height: 100vh;
+  background-color: var(--color-black);
+  overflow: hidden;
+}
+
+.login-left {
+  flex: 1;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  position: relative;
+  background: radial-gradient(circle at center, #1a1a1a 0%, var(--color-black) 70%);
+  border-right: 1px solid rgba(212, 175, 55, 0.1);
+  overflow: hidden;
+}
+
+.login-right {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  padding: 2rem;
+  background-color: var(--color-black);
+}
+
+@media (max-width: 768px) {
+  .login-left {
+    display: none;
+  }
+  .login-right {
+    flex: 1;
+  }
+}
+
+/* LoginForm CSS */
+.login-form-card {
+  width: 100%;
+  max-width: 400px;
+  background: rgba(20, 20, 20, 0.8);
+  backdrop-filter: blur(10px);
+  padding: 3rem 2rem;
+  border-radius: 16px;
+  border: 1px solid rgba(212, 175, 55, 0.2);
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5), 0 0 20px rgba(212, 175, 55, 0.05);
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.brand-header {
+  text-align: center;
+  margin-bottom: 2rem;
+}
+
+.brand-title {
+  font-family: 'Cormorant Garamond', serif !important;
+  font-size: 40px; /* Pouco maior que 30px para responsividade de logo */
+  color: #F0EDE6;
+  margin-bottom: 0.5rem;
+  font-weight: 400;
+  letter-spacing: -0.01em;
+  line-height: 1;
+}
+
+.brand-title span {
+  font-family: 'Cormorant Garamond', serif !important;
+  color: var(--color-gold);
+  font-style: italic;
+  font-weight: 400;
+}
+
+.brand-subtitle {
+  font-family: var(--font-sans-alt);
+  color: var(--color-text-muted);
+  font-size: 0.9rem;
+  font-weight: 300;
+  text-transform: none;
+  letter-spacing: normal;
+}
+
+.input-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.input-group label {
+  font-size: 0.875rem;
+  color: #cccccc;
+  font-weight: 500;
+}
+
+.input-group input {
+  padding: 0.75rem 1rem;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background-color: rgba(0, 0, 0, 0.5);
+  color: white;
+  font-size: 1rem;
+  transition: all 0.3s ease;
+  outline: none;
+}
+
+.input-group input:focus {
+  border-color: var(--color-gold);
+  box-shadow: 0 0 0 2px rgba(212, 175, 55, 0.2);
+}
+
+.forgot-password {
+  align-self: flex-end;
+  font-size: 0.8rem;
+  color: var(--color-gold);
+  text-decoration: none;
+  transition: color 0.2s;
+}
+
+.forgot-password:hover {
+  text-decoration: underline;
+  color: var(--color-gold-light);
+}
+
+.btn-submit {
+  width: 100%;
+  padding: 0.875rem;
+  border-radius: 8px;
+  background: var(--color-black);
+  color: #fff;
+  border: 1px solid rgba(212, 175, 55, 0.3);
+  font-size: 1rem;
+  font-weight: 500;
+  cursor: pointer;
+  margin-top: 1rem;
+  position: relative;
+  overflow: hidden;
+  transition: all 0.4s ease;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.4);
+}
+
+.btn-submit::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 50%;
+  height: 100%;
+  background: linear-gradient(to right, rgba(255,255,255,0) 0%, rgba(255,255,255,0.4) 50%, rgba(255,255,255,0) 100%);
+  transform: skewX(-25deg);
+  animation: none;
+  z-index: 1;
+}
+
+.btn-submit span {
+  position: relative;
+  z-index: 2;
+  transition: color 0.4s ease;
+}
+
+.btn-submit:hover {
+  background: linear-gradient(135deg, var(--color-gold) 0%, var(--color-gold-dark) 100%);
+  border-color: var(--color-gold);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(212, 175, 55, 0.4);
+}
+
+.btn-submit:hover span {
+  color: #000;
+  font-weight: 600;
+}
+
+.btn-submit:hover::before {
+  animation: shine 0.7s ease-in-out forwards;
+}
+
+@keyframes shine {
+  0% { left: -100%; }
+  100% { left: 200%; }
+}
+
+/* Overlay Text Layout */
+.brand-overlay-text {
+  position: absolute;
+  z-index: 2;
+  pointer-events: none;
+  left: 4rem;
+}
+
+.brand-overlay-text.top-left {
+  top: 4rem;
+}
+
+.accent-line {
+  width: 40px;
+  height: 2px;
+  background-color: var(--color-gold);
+  margin-bottom: 1.5rem;
+}
+
+.main-slogan {
+  font-family: var(--font-serif);
+  font-size: 2.8rem;
+  line-height: 1.1;
+  font-weight: 400;
+  color: #fff;
+  margin-bottom: 1rem;
+}
+
+.main-slogan .gold-text {
+  color: var(--color-gold);
+}
+
+.sub-slogan {
+  font-family: var(--font-sans-alt);
+  font-size: 0.65rem;
+  letter-spacing: 0.2em;
+  color: rgba(255, 255, 255, 0.4);
+  text-transform: uppercase;
+  font-weight: 500;
+}
+
+.brand-overlay-text.bottom-left {
+  bottom: 4rem;
+}
+
+.accent-border {
+  border-left: 1px solid rgba(255, 255, 255, 0.2);
+  padding-left: 1.5rem;
+}
+
+.accent-border p {
+  font-family: var(--font-serif);
+  font-size: 0.95rem;
+  font-style: italic;
+  color: rgba(255, 255, 255, 0.5);
+  margin-bottom: 0.4rem;
+}
+
+.accent-border p:last-child {
+  margin-bottom: 0;
+}
+
+/* Interactive CRM Network CSS */
+.animation-container {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  touch-action: none; /* Prevent scroll on touch while dragging map */
+}
+
+.interactive-node {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  cursor: grab;
+  z-index: 10;
+  color: #555555;
+  opacity: 0.4;
+  transition: opacity 0.4s, color 0.4s;
+  padding: 15px; /* give touch target area */
+  border-radius: 50%;
+}
+
+.interactive-node:active {
+  cursor: grabbing;
+}
+
+.interactive-node.connected {
+  color: var(--color-gold);
+  opacity: 1;
+  filter: drop-shadow(0 0 15px rgba(59, 130, 246, 0.5));
+  animation: pulse-node 2s infinite ease-in-out;
+}
+
+.interactive-node.server {
+  color: #fff;
+  opacity: 1;
+  filter: drop-shadow(0 0 25px rgba(59, 130, 246, 0.9));
+  animation: server-pulse 1.5s infinite alternate ease-in-out;
+}
+
+@keyframes pulse-node {
+  0% { transform: translate(-50%, -50%) scale(1); }
+  50% { transform: translate(-50%, -50%) scale(1.1); }
+  100% { transform: translate(-50%, -50%) scale(1); }
+}
+
+@keyframes server-pulse {
+  0% { transform: translate(-50%, -50%) scale(1); }
+  100% { transform: translate(-50%, -50%) scale(1.15); }
+}
+
+.svg-layer {
+  position: absolute;
+  top: 0; left: 0;
+  width: 100%; height: 100%;
+  pointer-events: none;
+  z-index: 5;
+}
+
+.connection-line {
+  stroke: var(--color-gold);
+  stroke-width: 3;
+  stroke-dasharray: 10 5;
+  animation: flow 1s linear infinite;
+  filter: drop-shadow(0 0 8px var(--color-gold));
+  transition: all 0.3s;
+}
+
+.connection-line.active-drag {
+  stroke: var(--color-gold-light);
+  opacity: 0.6;
+  stroke-dasharray: 15 10;
+  stroke-width: 2;
+  filter: drop-shadow(0 0 4px var(--color-gold-light));
+}
+
+.broken-data {
+  stroke: rgba(255, 255, 255, 0.05);
+  stroke-width: 1;
+  stroke-dasharray: 3 6;
+}
+
+@keyframes flow {
+  to { stroke-dashoffset: -15; }
+}
+
+@keyframes crmSuck {
+  0% {
+    transform: translate(-50%, -50%) scale(1);
+    opacity: 1;
+    filter: blur(0px);
+  }
+  15% {
+    transform: translate(-50%, -50%) scale(1.3) rotate(-10deg);
+    opacity: 1;
+    filter: blur(2px) drop-shadow(0 0 40px var(--color-gold));
+  }
+  30% {
+    transform: translate(-50%, -50%) scale(1.2) rotate(15deg);
+    opacity: 0.9;
+  }
+  100% {
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%) scale(0) rotate(720deg);
+    opacity: 0;
+    filter: blur(6px);
+  }
+}
+
+.interactive-node.sucked {
+  animation: crmSuck 1.5s cubic-bezier(0.5, 0, 0.2, 1) forwards !important;
+}
+
+/* Ensure suck effect is properly themed blue */
+.suck-effect {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 100px;
+  height: 100px;
+  border-radius: 50%;
+  background: radial-gradient(circle, var(--color-gold-dark) 0%, transparent 70%);
+  opacity: 0;
+  transform: translate(-50%, -50%) scale(0);
+  z-index: 20;
+  pointer-events: none;
+}
+
+.suck-effect.active {
+  animation: explode 1.5s cubic-bezier(0.16, 1, 0.3, 1) 1.2s forwards;
+}
+
+@keyframes explode {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0);
+  }
+  30% {
+    opacity: 0.8;
+    transform: translate(-50%, -50%) scale(2);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(10);
+  }
+}
+
+.logo-reveal {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 300px;
+  height: auto;
+  opacity: 0;
+  transform: translate(-50%, -50%) scale(0.5);
+  transition: all 2s cubic-bezier(0.16, 1, 0.3, 1);
+  filter: drop-shadow(0 0 0 rgba(212, 175, 55, 0));
+  z-index: 5;
+}
+
+.logo-reveal.visible {
+  opacity: 1;
+  transform: translate(-50%, -50%) scale(1);
+  filter: drop-shadow(0 0 30px rgba(59, 130, 246, 0.4));
+}
