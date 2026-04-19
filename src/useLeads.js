@@ -26,12 +26,13 @@ const PONTOS = {
 };
 
 export async function removerEventoLead(empresaId, lead, eventoId) {
-  const leadRef = doc(db, "empresas", empresaId, "leads", lead.id);
-  const evento = (lead.eventos || []).find(e => e.id === eventoId);
-  if (!evento) return;
-  await updateDoc(leadRef, {
-    eventos: arrayRemove(evento),
-  });
+  const leads = await lerLeads(empresaId);
+  const leadsAtualizados = leads.map(l =>
+    l.id === lead.id
+      ? { ...stripCalculados(l), eventos: (l.eventos || []).filter(e => e.id !== eventoId), atualizadoEm: new Date().toISOString() }
+      : l
+  );
+  await setDoc(doc(db, "dadosCRM", empresaId), { leads: leadsAtualizados }, { merge: true });
 }
 function calcularScoreLead(lead) {
   const eventos = lead.eventos || [];
