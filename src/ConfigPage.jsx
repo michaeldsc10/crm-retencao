@@ -10,80 +10,6 @@ import { db } from "./firebase";
 import { SNIPPET_HTML, SNIPPET_REACT, SNIPPET_API } from "./capturaSnippets";
 import { RADAR_PADRAO } from "./useCRM";
 
-// ─── Seção: Configurar Radar ──────────────────────────────────────────────────
-function ConfigurarRadar({ T, empresaId }) {
-  const [valores, setValores] = useState(null);   // null = carregando
-  const [salvando, setSalvando] = useState(false);
-  const [feedback, setFeedback] = useState(null); // "ok" | "erro"
-
-  // Lê dadosCRM/{empresaId}/radar/risco em tempo real
-  useEffect(() => {
-    if (!empresaId) return;
-    const unsub = onSnapshot(
-      doc(db, "dadosCRM", empresaId, "radar", "risco"),
-      (snap) => setValores(snap.exists() ? { ...RADAR_PADRAO, ...snap.data() } : { ...RADAR_PADRAO }),
-      (err) => { console.warn("[ConfigRadar]", err); setValores({ ...RADAR_PADRAO }); }
-    );
-    return () => unsub();
-  }, [empresaId]);
-
-  async function salvar() {
-    if (!empresaId || salvando) return;
-    setSalvando(true);
-    setFeedback(null);
-    try {
-      await setDoc(
-        doc(db, "dadosCRM", empresaId, "radar", "risco"),
-        valores,
-        { merge: true }
-      );
-      setFeedback("ok");
-      setTimeout(() => setFeedback(null), 3000);
-    } catch (err) {
-      console.error("[ConfigRadar] Erro ao salvar:", err);
-      setFeedback("erro");
-    } finally {
-      setSalvando(false);
-    }
-  }
-
-  function campo(key, label, descricao, min, max) {
-    return (
-      <div style={{ marginBottom: 16 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 4 }}>
-          <label style={{ fontSize: 12, fontWeight: 600, color: T.text }}>{label}</label>
-          <span style={{ fontSize: 10, color: T.textDim }}>padrão: {RADAR_PADRAO[key]}</span>
-        </div>
-        <p style={{ fontSize: 11, color: T.textDim, margin: "0 0 8px", lineHeight: 1.5 }}>{descricao}</p>
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <input
-            type="number"
-            min={min}
-            max={max}
-            value={valores?.[key] ?? RADAR_PADRAO[key]}
-            onChange={(e) => setValores((v) => ({ ...v, [key]: parseFloat(e.target.value) || 0 }))}
-            style={{
-              width: 80, padding: "8px 10px", borderRadius: 7,
-              border: `1px solid ${T.border}`, background: T.bg,
-              color: T.text, fontSize: 13, fontWeight: 600,
-              outline: "none", textAlign: "center",
-              fontFamily: "inherit",
-            }}
-            onFocus={(e) => (e.target.style.borderColor = T.gold)}
-            onBlur={(e)  => (e.target.style.borderColor = T.border)}
-          />
-          <span style={{ fontSize: 11, color: T.textMid }}>{key.startsWith("mult") ? "×" : "dias"}</span>
-        </div>
-      </div>
-    );
-  }
-
-  if (!valores) return (
-    <div style={{ fontSize: 12, color: T.textDim, padding: "16px 0" }}>Carregando configurações...</div>
-  );
-
- 
-
 // ─── Helper: gera novo slug ───────────────────────────────────────────────────
 function gerarSlug(nomeEmpresa = "") {
   const base = nomeEmpresa
@@ -513,9 +439,6 @@ export default function ConfigPage({ T, bp, empresaId, config }) {
 
   return (
     <div style={{ maxWidth: 720 }}>
-
-      {/* ── Seção: Configurar Radar ── */}
-      <ConfigurarRadar T={T} empresaId={empresaId} />
 
       {/* ── Seção: Configurar Radar ── */}
       <div style={{
