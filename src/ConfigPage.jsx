@@ -8,6 +8,142 @@ import { useState, useEffect } from "react";
 import { doc, setDoc, onSnapshot } from "firebase/firestore";
 import { db } from "./firebase";
 import { SNIPPET_HTML, SNIPPET_REACT, SNIPPET_API } from "./capturaSnippets";
+import { RADAR_PADRAO } from "./useCRM";
+
+// ─── Seção: Configurar Radar ──────────────────────────────────────────────────
+function ConfigurarRadar({ T, empresaId }) {
+  const [valores, setValores] = useState(null);   // null = carregando
+  const [salvando, setSalvando] = useState(false);
+  const [feedback, setFeedback] = useState(null); // "ok" | "erro"
+
+  // Lê dadosCRM/{empresaId}/radar/risco em tempo real
+  useEffect(() => {
+    if (!empresaId) return;
+    const unsub = onSnapshot(
+      doc(db, "dadosCRM", empresaId, "radar", "risco"),
+      (snap) => setValores(snap.exists() ? { ...RADAR_PADRAO, ...snap.data() } : { ...RADAR_PADRAO }),
+      (err) => { console.warn("[ConfigRadar]", err); setValores({ ...RADAR_PADRAO }); }
+    );
+    return () => unsub();
+  }, [empresaId]);
+
+  async function salvar() {
+    if (!empresaId || salvando) return;
+    setSalvando(true);
+    setFeedback(null);
+    try {
+      await setDoc(
+        doc(db, "dadosCRM", empresaId, "radar", "risco"),
+        valores,
+        { merge: true }
+      );
+      setFeedback("ok");
+      setTimeout(() => setFeedback(null), 3000);
+    } catch (err) {
+      console.error("[ConfigRadar] Erro ao salvar:", err);
+      setFeedback("erro");
+    } finally {
+      setSalvando(false);
+    }
+  }
+
+  function campo(key, label, descricao, min, max) {
+    return (
+      <div style={{ marginBottom: 16 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 4 }}>
+          <label style={{ fontSize: 12, fontWeight: 600, color: T.text }}>{label}</label>
+          <span style={{ fontSize: 10, color: T.textDim }}>padrão: {RADAR_PADRAO[key]}</span>
+        </div>
+        <p style={{ fontSize: 11, color: T.textDim, margin: "0 0 8px", lineHeight: 1.5 }}>{descricao}</p>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <input
+            type="number"
+            min={min}
+            max={max}
+            value={valores?.[key] ?? RADAR_PADRAO[key]}
+            onChange={(e) => setValores((v) => ({ ...v, [key]: parseFloat(e.target.value) || 0 }))}
+            style={{
+              width: 80, padding: "8px 10px", borderRadius: 7,
+              border: `1px solid ${T.border}`, background: T.bg,
+              color: T.text, fontSize: 13, fontWeight: 600,
+              outline: "none", textAlign: "center",
+              fontFamily: "inherit",
+            }}
+            onFocus={(e) => (e.target.style.borderColor = T.gold)}
+            onBlur={(e)  => (e.target.style.borderColor = T.border)}
+          />
+          <span style={{ fontSize: 11, color: T.textMid }}>{key.startsWith("mult") ? "×" : "dias"}</span>
+        </div>
+      </div>
+    );
+  }
+
+  if (!valores) return (
+    <div style={{ fontSize: 12, color: T.textDim, padding: "16px 0" }}>Carregando configurações...</div>
+  );
+
+  return (
+    <div style={{
+      background: T.surface, border: `1px solid ${T.border}`,
+      borderRadius: 10, padding: "20px 22px", marginBottom: 16,
+    }}>
+      <SecaoTitulo T={T}>Configurar Radar</SecaoTitulo>
+      <p style={{ fontSize: 12, color: T.textMid, lineHeight: 1.7, margin: "0 0 20px" }}>
+        Define quando um cliente entra no Radar do dia. O sistema usa dois critérios: dias sem aparecer (para clientes com poucas compras) e multiplicador da frequência média (para clientes com histórico).
+      </p>
+
+      <div style={{
+        display: "grid",
+        gridTemplateColumns: "1fr 1fr",
+        gap: "0 28px",
+      }}>
+        <div>
+          <p style={{ fontSize: 10, fontWeight: 700, color: T.textDim, letterSpacing: "0.10em", textTransform: "uppercase", marginBottom: 14 }}>
+            Sem histórico de frequência
+          </p>
+          {campo("diasMedio", "⚠️ Atenção a partir de", "Dias ausente para marcar como Atenção.", 1, 365)}
+          {campo("diasAlto",  "🔴 Risco alto a partir de", "Dias ausente para marcar como Risco alto.", 1, 365)}
+        </div>
+
+        <div>
+          <p style={{ fontSize: 10, fontWeight: 700, color: T.textDim, letterSpacing: "0.10em", textTransform: "uppercase", marginBottom: 14 }}>
+            Com histórico de frequência
+          </p>
+          {campo("multMedio", "⚠️ Atenção acima de", "Multiplicador da frequência média para Atenção. Ex: 1.5× = cliente que volta a cada 10 dias está ausente há 15+.", 0.1, 20)}
+          {campo("multAlto",  "🔴 Risco alto acima de", "Multiplicador da frequência média para Risco alto.", 0.1, 20)}
+        </div>
+      </div>
+
+      <div style={{ display: "flex", alignItems: "center", gap: 12, marginTop: 8, paddingTop: 16, borderTop: `1px solid ${T.border}` }}>
+        <button
+          onClick={salvar}
+          disabled={salvando}
+          style={{
+            fontSize: 11, fontWeight: 700, padding: "8px 20px", borderRadius: 7,
+            background: salvando ? T.surfaceAlt : T.gold,
+            color: salvando ? T.textMid : "#000",
+            border: "none", cursor: salvando ? "not-allowed" : "pointer",
+            fontFamily: "inherit", textTransform: "uppercase", letterSpacing: "0.04em",
+            transition: "all 0.15s",
+          }}
+        >{salvando ? "Salvando..." : "Salvar configurações"}</button>
+
+        <button
+          onClick={() => setValores({ ...RADAR_PADRAO })}
+          style={{
+            fontSize: 11, padding: "8px 14px", borderRadius: 7,
+            background: "none", border: `1px solid ${T.border}`,
+            color: T.textMid, cursor: "pointer", fontFamily: "inherit",
+          }}
+        >Restaurar padrão</button>
+
+        {feedback === "ok"   && <span style={{ fontSize: 12, color: T.green }}>✓ Salvo com sucesso.</span>}
+        {feedback === "erro" && <span style={{ fontSize: 12, color: T.red }}>Erro ao salvar. Tente novamente.</span>}
+      </div>
+    </div>
+  );
+}
+import { RADAR_PADRAO } from "./useCRM";
 
 // ─── Helper: gera novo slug ───────────────────────────────────────────────────
 function gerarSlug(nomeEmpresa = "") {
@@ -321,6 +457,58 @@ export default function ConfigPage({ T, bp, empresaId, config }) {
     return () => unsub();
   }, [empresaId]);
 
+  // ── Radar: dadosCRM/{empresaId}/radar/risco ───────────────────────────────
+  const [radarConfig, setRadarConfig] = useState(null);   // null = carregando
+  const [radarForm,   setRadarForm]   = useState(null);   // valores do formulário
+  const [salvandoRadar, setSalvandoRadar] = useState(false);
+  const [feedbackRadar, setFeedbackRadar] = useState(null); // "ok" | "erro"
+
+  useEffect(() => {
+    if (!empresaId) return;
+    const unsub = onSnapshot(
+      doc(db, "dadosCRM", empresaId, "radar", "risco"),
+      (snap) => {
+        const dados = snap.exists() ? snap.data() : RADAR_PADRAO;
+        const merged = { ...RADAR_PADRAO, ...dados };
+        setRadarConfig(merged);
+        setRadarForm(merged);
+      },
+      () => {
+        // Doc ainda não existe — usa padrão
+        setRadarConfig(RADAR_PADRAO);
+        setRadarForm({ ...RADAR_PADRAO });
+      }
+    );
+    return () => unsub();
+  }, [empresaId]);
+
+  async function salvarRadar() {
+    if (!empresaId || salvandoRadar) return;
+    setSalvandoRadar(true);
+    setFeedbackRadar(null);
+    try {
+      // Garante que diasMedio < diasAlto e multMedio < multAlto
+      const payload = {
+        diasMedio: Math.min(radarForm.diasMedio, radarForm.diasAlto - 1),
+        diasAlto:  radarForm.diasAlto,
+        multMedio: Math.min(radarForm.multMedio, radarForm.multAlto - 0.1),
+        multAlto:  radarForm.multAlto,
+      };
+      await setDoc(doc(db, "dadosCRM", empresaId, "radar", "risco"), payload, { merge: true });
+      setFeedbackRadar("ok");
+      setTimeout(() => setFeedbackRadar(null), 3000);
+    } catch (err) {
+      console.error("[ConfigPage] Erro ao salvar radar:", err);
+      setFeedbackRadar("erro");
+    } finally {
+      setSalvandoRadar(false);
+    }
+  }
+
+  function resetarRadar() {
+    setRadarForm({ ...RADAR_PADRAO });
+  }
+
   const cfUrl = "https://southamerica-east1-assent-2b945.cloudfunctions.net/capturarLead";
 
   const slugCarregando = crmConfig === null;
@@ -386,6 +574,172 @@ export default function ConfigPage({ T, bp, empresaId, config }) {
 
   return (
     <div style={{ maxWidth: 720 }}>
+
+      {/* ── Seção: Configurar Radar ── */}
+      <ConfigurarRadar T={T} empresaId={empresaId} />
+
+      {/* ── Seção: Configurar Radar ── */}
+      <div style={{
+        background: T.surface, border: `1px solid ${T.border}`,
+        borderRadius: 10, padding: "20px 22px", marginBottom: 16,
+      }}>
+        <SecaoTitulo T={T}>Configurar Radar</SecaoTitulo>
+        <p style={{ fontSize: 12, color: T.textMid, lineHeight: 1.7, margin: "0 0 18px" }}>
+          Defina os limiares que classificam clientes como <strong style={{ color: T.yellow }}>Atenção</strong> ou <strong style={{ color: T.red }}>Risco alto</strong> no Radar do dia.
+          Os valores são aplicados em tempo real assim que salvos.
+        </p>
+
+        {radarForm === null ? (
+          <div style={{ fontSize: 12, color: T.textDim, fontStyle: "italic" }}>Carregando...</div>
+        ) : (
+          <>
+            {/* Bloco: sem histórico de frequência */}
+            <div style={{ marginBottom: 20 }}>
+              <div style={{
+                fontSize: 9.5, fontWeight: 700, color: T.textDim,
+                letterSpacing: "0.10em", textTransform: "uppercase", marginBottom: 12,
+              }}>
+                Clientes sem histórico de frequência (dias ausente)
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: bp.isMobile ? "1fr" : "1fr 1fr", gap: 12 }}>
+
+                <div style={{ background: T.surfaceAlt, border: `1px solid ${T.yellowBorder}`, borderRadius: 8, padding: "14px 16px" }}>
+                  <label style={{ fontSize: 11, fontWeight: 600, color: T.yellow, display: "block", marginBottom: 8, letterSpacing: "0.04em" }}>
+                    ● Atenção — dias ausente
+                  </label>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                    <input
+                      type="number" min={1} max={radarForm.diasAlto - 1}
+                      value={radarForm.diasMedio}
+                      onChange={e => setRadarForm(f => ({ ...f, diasMedio: Math.max(1, parseInt(e.target.value) || 1) }))}
+                      style={{
+                        width: 72, padding: "7px 10px", borderRadius: 6, textAlign: "center",
+                        border: `1px solid ${T.border}`, background: T.bg,
+                        color: T.text, fontSize: 15, fontWeight: 700,
+                        outline: "none", fontFamily: "inherit",
+                      }}
+                    />
+                    <span style={{ fontSize: 12, color: T.textMid }}>dias</span>
+                    <span style={{ fontSize: 10, color: T.textDim, marginLeft: "auto" }}>padrão: {RADAR_PADRAO.diasMedio}d</span>
+                  </div>
+                </div>
+
+                <div style={{ background: T.surfaceAlt, border: `1px solid ${T.redBorder}`, borderRadius: 8, padding: "14px 16px" }}>
+                  <label style={{ fontSize: 11, fontWeight: 600, color: T.red, display: "block", marginBottom: 8, letterSpacing: "0.04em" }}>
+                    ● Risco alto — dias ausente
+                  </label>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                    <input
+                      type="number" min={radarForm.diasMedio + 1}
+                      value={radarForm.diasAlto}
+                      onChange={e => setRadarForm(f => ({ ...f, diasAlto: Math.max(f.diasMedio + 1, parseInt(e.target.value) || f.diasMedio + 1) }))}
+                      style={{
+                        width: 72, padding: "7px 10px", borderRadius: 6, textAlign: "center",
+                        border: `1px solid ${T.border}`, background: T.bg,
+                        color: T.text, fontSize: 15, fontWeight: 700,
+                        outline: "none", fontFamily: "inherit",
+                      }}
+                    />
+                    <span style={{ fontSize: 12, color: T.textMid }}>dias</span>
+                    <span style={{ fontSize: 10, color: T.textDim, marginLeft: "auto" }}>padrão: {RADAR_PADRAO.diasAlto}d</span>
+                  </div>
+                </div>
+
+              </div>
+            </div>
+
+            {/* Bloco: com histórico de frequência */}
+            <div style={{ marginBottom: 20 }}>
+              <div style={{
+                fontSize: 9.5, fontWeight: 700, color: T.textDim,
+                letterSpacing: "0.10em", textTransform: "uppercase", marginBottom: 12,
+              }}>
+                Clientes com histórico de frequência (multiplicador)
+              </div>
+              <p style={{ fontSize: 11, color: T.textDim, lineHeight: 1.6, margin: "0 0 12px" }}>
+                Quando há histórico, o risco é calculado pelo tempo ausente ÷ frequência média do cliente. Ex: se a frequência média é 20 dias e o cliente está há 40 dias ausente, o multiplicador é 2×.
+              </p>
+              <div style={{ display: "grid", gridTemplateColumns: bp.isMobile ? "1fr" : "1fr 1fr", gap: 12 }}>
+
+                <div style={{ background: T.surfaceAlt, border: `1px solid ${T.yellowBorder}`, borderRadius: 8, padding: "14px 16px" }}>
+                  <label style={{ fontSize: 11, fontWeight: 600, color: T.yellow, display: "block", marginBottom: 8, letterSpacing: "0.04em" }}>
+                    ● Atenção — multiplicador acima de
+                  </label>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                    <input
+                      type="number" min={0.1} max={radarForm.multAlto - 0.1} step={0.1}
+                      value={radarForm.multMedio}
+                      onChange={e => setRadarForm(f => ({ ...f, multMedio: Math.max(0.1, parseFloat(e.target.value) || 0.1) }))}
+                      style={{
+                        width: 72, padding: "7px 10px", borderRadius: 6, textAlign: "center",
+                        border: `1px solid ${T.border}`, background: T.bg,
+                        color: T.text, fontSize: 15, fontWeight: 700,
+                        outline: "none", fontFamily: "inherit",
+                      }}
+                    />
+                    <span style={{ fontSize: 12, color: T.textMid }}>×</span>
+                    <span style={{ fontSize: 10, color: T.textDim, marginLeft: "auto" }}>padrão: {RADAR_PADRAO.multMedio}×</span>
+                  </div>
+                </div>
+
+                <div style={{ background: T.surfaceAlt, border: `1px solid ${T.redBorder}`, borderRadius: 8, padding: "14px 16px" }}>
+                  <label style={{ fontSize: 11, fontWeight: 600, color: T.red, display: "block", marginBottom: 8, letterSpacing: "0.04em" }}>
+                    ● Risco alto — multiplicador acima de
+                  </label>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                    <input
+                      type="number" min={radarForm.multMedio + 0.1} step={0.1}
+                      value={radarForm.multAlto}
+                      onChange={e => setRadarForm(f => ({ ...f, multAlto: Math.max(f.multMedio + 0.1, parseFloat(e.target.value) || f.multMedio + 0.1) }))}
+                      style={{
+                        width: 72, padding: "7px 10px", borderRadius: 6, textAlign: "center",
+                        border: `1px solid ${T.border}`, background: T.bg,
+                        color: T.text, fontSize: 15, fontWeight: 700,
+                        outline: "none", fontFamily: "inherit",
+                      }}
+                    />
+                    <span style={{ fontSize: 12, color: T.textMid }}>×</span>
+                    <span style={{ fontSize: 10, color: T.textDim, marginLeft: "auto" }}>padrão: {RADAR_PADRAO.multAlto}×</span>
+                  </div>
+                </div>
+
+              </div>
+            </div>
+
+            {/* Botões */}
+            <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+              <button
+                onClick={salvarRadar}
+                disabled={salvandoRadar}
+                style={{
+                  fontSize: 11.5, fontWeight: 700, padding: "9px 20px", borderRadius: 7,
+                  background: salvandoRadar ? T.surfaceAlt : T.gold,
+                  color: salvandoRadar ? T.textMid : "#000",
+                  border: "none", cursor: salvandoRadar ? "not-allowed" : "pointer",
+                  fontFamily: "inherit", letterSpacing: "0.04em", textTransform: "uppercase",
+                  transition: "all 0.15s",
+                }}
+              >{salvandoRadar ? "Salvando..." : "✦ Salvar configuração"}</button>
+
+              <button
+                onClick={resetarRadar}
+                style={{
+                  fontSize: 11, padding: "9px 16px", borderRadius: 7,
+                  background: "none", border: `1px solid ${T.border}`,
+                  color: T.textMid, cursor: "pointer", fontFamily: "inherit",
+                }}
+              >↺ Restaurar padrões</button>
+
+              {feedbackRadar === "ok" && (
+                <span style={{ fontSize: 12, color: T.green }}>✓ Configuração salva. Radar atualizado em tempo real.</span>
+              )}
+              {feedbackRadar === "erro" && (
+                <span style={{ fontSize: 12, color: T.red }}>Erro ao salvar. Tente novamente.</span>
+              )}
+            </div>
+          </>
+        )}
+      </div>
 
       {/* ── Seção: Seu link de captura ── */}
       <div style={{
