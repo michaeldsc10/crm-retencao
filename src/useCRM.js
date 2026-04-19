@@ -396,25 +396,6 @@ export function useCRM(empresaId) {
       )
     );
 
-    // ── Radar: dadosCRM/{empresaId}/radar/risco ─────────────────────────────
-    // Se não existir, usa RADAR_PADRAO — não bloqueia o carregamento.
-    unsubs.push(
-      onSnapshot(
-        doc(db, "dadosCRM", empresaId, "radar", "risco"),
-        (snap) => {
-          buffer.radar = snap.exists() ? snap.data() : {};
-          pronto.radar = true;
-          recalcular();
-        },
-        (err) => {
-          console.warn("[useCRM] radar/risco não encontrado (usando padrão):", err);
-          buffer.radar = {};
-          pronto.radar = true;
-          recalcular();
-        }
-      )
-    );
-
     return () => unsubs.forEach((u) => u());
   }, [empresaId]);
 
