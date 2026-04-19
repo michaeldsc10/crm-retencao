@@ -569,7 +569,7 @@ export default function ConfigPage({ T, bp, empresaId, config }) {
     api:   SNIPPET_API(slugExibido),
   };
 
-  const TAB_LABELS = { html: "HTML puro", react: "React", api: "cURL / API" };
+ 
 
  
 
