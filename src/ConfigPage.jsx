@@ -143,7 +143,6 @@ function ConfigurarRadar({ T, empresaId }) {
     </div>
   );
 }
-import { RADAR_PADRAO } from "./useCRM";
 
 // ─── Helper: gera novo slug ───────────────────────────────────────────────────
 function gerarSlug(nomeEmpresa = "") {
