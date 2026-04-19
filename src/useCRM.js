@@ -2,6 +2,23 @@ import { useState, useEffect } from "react";
 import { doc, collection, onSnapshot } from "firebase/firestore";
 import { db } from "./firebase";
 
+// ─── Helper: converte Timestamp do Firestore ou string para Date ──────────────
+function toDate(val) {
+  if (!val) return new Date(0);
+  if (val?.toDate) return val.toDate(); // Firestore Timestamp
+  return new Date(val);
+}
+
+// ─── Helper: compara nome do cliente com tolerância a nomes parciais ──────────
+// BUG CORRIGIDO #3: vendas no Firestore usam "Ana Carolina" mas o cliente
+// se chama "Ana Carolina Soares". Matching exato quebrava tudo.
+function matchNomeCliente(vendaCliente = "", clienteNome = "") {
+  const a = (vendaCliente || "").trim().toLowerCase();
+  const b = (clienteNome || "").trim().toLowerCase();
+  if (!a || !b) return false;
+  return a === b || b.startsWith(a) || a.startsWith(b);
+}
+
 // ─── Score de churn ───────────────────────────────────────────────────────────
 
 function calcularScoreChurn(clientes = [], vendas = []) {
@@ -9,8 +26,9 @@ function calcularScoreChurn(clientes = [], vendas = []) {
 
   return clientes.map((cliente) => {
     const vendasCliente = vendas
-      .filter((v) => v.cliente === cliente.nome)
-      .map((v) => ({ ...v, _data: new Date(v.data) }))
+      // BUG CORRIGIDO #3: era v.cliente === cliente.nome (strict)
+      .filter((v) => matchNomeCliente(v.cliente, cliente.nome))
+      .map((v) => ({ ...v, _data: toDate(v.data) })) // BUG CORRIGIDO #2: Timestamp Firestore
       .sort((a, b) => a._data - b._data);
 
     if (vendasCliente.length === 0) {
@@ -33,13 +51,17 @@ function calcularScoreChurn(clientes = [], vendas = []) {
       );
     }
 
-    const totalGasto = vendasCliente.reduce((acc, v) => acc + (v.total || 0), 0);
+    // BUG CORRIGIDO #4: itens têm campo "nome", não "produto"
+    // BUG CORRIGIDO #5: v.total pode não existir; fallback para v.custoTotal
+    const totalGasto = vendasCliente.reduce((acc, v) => acc + (v.total ?? v.custoTotal ?? 0), 0);
     const ticketMedio = Math.round(totalGasto / vendasCliente.length);
 
     const contagem = {};
     vendasCliente.forEach((v) =>
       (v.itens || []).forEach((i) => {
-        contagem[i.produto] = (contagem[i.produto] || 0) + 1;
+        // BUG CORRIGIDO #4: campo correto é i.nome (não i.produto)
+        const nomeProduto = i.nome || i.produto || "Desconhecido";
+        contagem[nomeProduto] = (contagem[nomeProduto] || 0) + 1;
       })
     );
     const [produtoFavorito] =
@@ -95,19 +117,21 @@ function gerarInsights(clientesComScore, vendas = [], servicos = []) {
       });
     }
 
+    // BUG CORRIGIDO #3 + #4: matching e campo nome
     const comprados = new Set(
       vendas
-        .filter((v) => v.cliente === c.nome)
-        .flatMap((v) => (v.itens || []).map((i) => i.produto))
+        .filter((v) => matchNomeCliente(v.cliente, c.nome))
+        .flatMap((v) => (v.itens || []).map((i) => i.nome || i.produto))
     );
 
     const catFav = (() => {
       const cc = {};
       vendas
-        .filter((v) => v.cliente === c.nome)
+        .filter((v) => matchNomeCliente(v.cliente, c.nome))
         .forEach((v) =>
           (v.itens || []).forEach((item) => {
-            const srv = servicos.find((s) => s.nome === item.produto);
+            const nomeProd = item.nome || item.produto;
+            const srv = servicos.find((s) => s.nome === nomeProd);
             if (srv?.categoria) cc[srv.categoria] = (cc[srv.categoria] || 0) + 1;
           })
         );
@@ -151,9 +175,10 @@ function calcularMetricas(clientesComScore, vendas = []) {
     receitaEmRisco: com
       .filter((c) => c.risco === "alto")
       .reduce((a, c) => a + (c.ticketMedio || 0), 0),
+    // BUG CORRIGIDO #2 + #5: Timestamp e fallback de total
     receitaRecente: vendas
-      .filter((v) => new Date(v.data) >= trintaDias)
-      .reduce((a, v) => a + (v.total || 0), 0),
+      .filter((v) => toDate(v.data) >= trintaDias)
+      .reduce((a, v) => a + (v.total ?? v.custoTotal ?? 0), 0),
     ticketGeral: com.length
       ? Math.round(com.reduce((a, c) => a + (c.ticketMedio || 0), 0) / com.length)
       : 0,
@@ -161,16 +186,6 @@ function calcularMetricas(clientesComScore, vendas = []) {
 }
 
 // ─── Hook principal ───────────────────────────────────────────────────────────
-//
-// Estrutura esperada no Firestore (Assent Gestão):
-//
-//   users/{empresaId}                    ← documento raiz (contadores etc.)
-//   users/{empresaId}/clientes/{...}     ← subcoleção de clientes
-//   users/{empresaId}/vendas/{...}       ← subcoleção de vendas
-//   users/{empresaId}/servicos/{...}     ← subcoleção de serviços
-//   users/{empresaId}/config/geral       ← configurações da empresa
-//
-// ─────────────────────────────────────────────────────────────────────────────
 
 export function useCRM(empresaId) {
   const [estado, setEstado] = useState({
@@ -186,7 +201,6 @@ export function useCRM(empresaId) {
   useEffect(() => {
     if (!empresaId) return;
 
-    // Buffer compartilhado entre os listeners
     const buffer = {
       clientes: [],
       vendas: [],
@@ -194,7 +208,6 @@ export function useCRM(empresaId) {
       config: {},
     };
 
-    // Controle de quais listeners já dispararam pelo menos uma vez
     const pronto = {
       clientes: false,
       vendas: false,
@@ -202,7 +215,6 @@ export function useCRM(empresaId) {
       config: false,
     };
 
-    // Só recalcula quando todos os listeners tiverem carregado
     function recalcular() {
       if (!pronto.clientes || !pronto.vendas || !pronto.servicos || !pronto.config) return;
 
@@ -234,7 +246,6 @@ export function useCRM(empresaId) {
 
     const unsubs = [];
 
-    // 1. Subcoleção: clientes
     unsubs.push(
       onSnapshot(
         collection(db, "users", empresaId, "clientes"),
@@ -247,7 +258,6 @@ export function useCRM(empresaId) {
       )
     );
 
-    // 2. Subcoleção: vendas
     unsubs.push(
       onSnapshot(
         collection(db, "users", empresaId, "vendas"),
@@ -260,7 +270,6 @@ export function useCRM(empresaId) {
       )
     );
 
-    // 3. Subcoleção: servicos
     unsubs.push(
       onSnapshot(
         collection(db, "users", empresaId, "servicos"),
@@ -273,7 +282,6 @@ export function useCRM(empresaId) {
       )
     );
 
-    // 4. Documento de config (users/{id}/config/geral)
     unsubs.push(
       onSnapshot(
         doc(db, "users", empresaId, "config", "geral"),
@@ -283,7 +291,6 @@ export function useCRM(empresaId) {
           recalcular();
         },
         (err) => {
-          // Config não é crítica: marca como pronto mesmo sem dados
           console.warn("[useCRM] Config não encontrada:", err);
           pronto.config = true;
           recalcular();
@@ -299,7 +306,8 @@ export function useCRM(empresaId) {
 
 // ─── Gerador de prompt para IA ────────────────────────────────────────────────
 //
-// Acesse o nome da empresa via: config?.empresa?.nomeEmpresa
+// BUG CORRIGIDO #1: nome da empresa está em config.empresa.nomeEmpresa,
+// não em config.empresaNome. Corrigido aqui e em App.jsx.
 //
 // ─────────────────────────────────────────────────────────────────────────────
 
