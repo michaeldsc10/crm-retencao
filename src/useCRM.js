@@ -9,6 +9,16 @@ import {
 } from "firebase/firestore";
 import { db } from "./firebase";
 
+// ─── Configuração padrão do Radar ────────────────────────────────────────────
+// Salva em dadosCRM/{empresaId} → radar
+// Sobrescrito pelo usuário via Configurações → Configurar Radar.
+export const RADAR_PADRAO = {
+  diasMedio: 15,   // dias ausente → risco médio  (sem histórico de frequência)
+  diasAlto:  30,   // dias ausente → risco alto   (sem histórico de frequência)
+  multMedio: 1.5,  // mult. da freq. média → risco médio
+  multAlto:  2.5,  // mult. da freq. média → risco alto
+};
+
 // ─── Helper: converte Timestamp do Firestore ou string para Date ──────────────
 function toDate(val) {
   if (!val) return new Date(0);
@@ -54,7 +64,8 @@ export async function reativarCliente(empresaId, clienteIgnorado) {
 }
 
 // ─── Score de churn ───────────────────────────────────────────────────────────
-function calcularScoreChurn(clientes = [], vendas = []) {
+function calcularScoreChurn(clientes = [], vendas = [], radar = RADAR_PADRAO) {
+  const { diasMedio, diasAlto, multMedio, multAlto } = { ...RADAR_PADRAO, ...radar };
   const hoje = new Date();
 
   return clientes.map((cliente) => {
@@ -101,11 +112,11 @@ function calcularScoreChurn(clientes = [], vendas = []) {
     const mult = frequenciaMedia ? diasAusente / frequenciaMedia : null;
     let risco = "baixo";
     if (mult !== null) {
-      if (mult > 2.5) risco = "alto";
-      else if (mult > 1.5) risco = "medio";
+      if (mult > multAlto)  risco = "alto";
+      else if (mult > multMedio) risco = "medio";
     } else {
-      if (diasAusente > 60) risco = "alto";
-      else if (diasAusente > 30) risco = "medio";
+      if (diasAusente > diasAlto)  risco = "alto";
+      else if (diasAusente > diasMedio) risco = "medio";
     }
 
     return {
@@ -230,6 +241,7 @@ export function useCRM(empresaId) {
     metricas: null,
     config: null,
     ignorados: [],
+    radar: RADAR_PADRAO,
   });
 
   useEffect(() => {
@@ -241,6 +253,7 @@ export function useCRM(empresaId) {
       servicos:  [],
       config:    {},
       ignorados: [],
+      radar:     {},
     };
 
     const pronto = {
@@ -249,6 +262,7 @@ export function useCRM(empresaId) {
       servicos:  false,
       config:    false,
       ignorados: false,
+      radar:     false,
     };
 
     function recalcular() {
@@ -257,10 +271,12 @@ export function useCRM(empresaId) {
         !pronto.vendas    ||
         !pronto.servicos  ||
         !pronto.config    ||
-        !pronto.ignorados
+        !pronto.ignorados ||
+        !pronto.radar
       ) return;
 
-      const clientesComScore = calcularScoreChurn(buffer.clientes, buffer.vendas);
+      const radar = { ...RADAR_PADRAO, ...buffer.radar };
+      const clientesComScore = calcularScoreChurn(buffer.clientes, buffer.vendas, radar);
       const insights = gerarInsights(
         clientesComScore,
         buffer.vendas,
@@ -278,6 +294,7 @@ export function useCRM(empresaId) {
         metricas,
         config: buffer.config,
         ignorados: buffer.ignorados,
+        radar,
       });
     }
 
@@ -355,6 +372,44 @@ export function useCRM(empresaId) {
           // Coleção pode ainda não existir: não bloqueia o sistema
           console.warn("[useCRM] Coleção ignore não encontrada (normal na 1ª vez):", err);
           pronto.ignorados = true;
+          recalcular();
+        }
+      )
+    );
+
+    // ── Radar: dadosCRM/{empresaId}/radar/risco ─────────────────────────────
+    // Se o doc não existir, usa RADAR_PADRAO — não bloqueia o sistema.
+    unsubs.push(
+      onSnapshot(
+        doc(db, "dadosCRM", empresaId, "radar", "risco"),
+        (snap) => {
+          buffer.radar = snap.exists() ? snap.data() : {};
+          pronto.radar = true;
+          recalcular();
+        },
+        (err) => {
+          console.warn("[useCRM] Config radar não encontrada (usando padrão):", err);
+          buffer.radar = {};
+          pronto.radar = true;
+          recalcular();
+        }
+      )
+    );
+
+    // ── Radar: dadosCRM/{empresaId}/radar/risco ─────────────────────────────
+    // Se não existir, usa RADAR_PADRAO — não bloqueia o carregamento.
+    unsubs.push(
+      onSnapshot(
+        doc(db, "dadosCRM", empresaId, "radar", "risco"),
+        (snap) => {
+          buffer.radar = snap.exists() ? snap.data() : {};
+          pronto.radar = true;
+          recalcular();
+        },
+        (err) => {
+          console.warn("[useCRM] radar/risco não encontrado (usando padrão):", err);
+          buffer.radar = {};
+          pronto.radar = true;
           recalcular();
         }
       )
