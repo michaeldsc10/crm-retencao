@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { onAuthStateChanged, signOut } from "firebase/auth";
 import { doc, getDoc } from "firebase/firestore";
 import { auth, db } from "./firebase";
-import { useCRM, montarPromptMensagem } from "./useCRM";
+import { useCRM, montarPromptMensagem, ignorarCliente, reativarCliente } from "./useCRM";
 import LeadsPage from "./LeadsPage";
 import ConfigPage from "./ConfigPage";
 import NotificacoesLeads from "./NotificacoesLeads";
@@ -157,9 +157,10 @@ function MetricCard({ val, label, color, T }) {
 }
 
 // ─── Insight Card ─────────────────────────────────────────────────────────────
-function InsightCard({ insight, empresaNome, T }) {
+function InsightCard({ insight, empresaNome, empresaId, T }) {
   const [msg, setMsg] = useState(null);
   const [gerando, setGerando] = useState(false);
+  const [ignorando, setIgnorando] = useState(false);
 
   const cores = {
     risco: { borda: T.red, badgeBg: T.redDim, badgeColor: T.red, label: "Risco de perda" },
@@ -176,6 +177,21 @@ function InsightCard({ insight, empresaNome, T }) {
       setMsg(await chamarIA(system, user));
     } catch { setMsg("Erro ao gerar mensagem. Tente novamente."); }
     finally { setGerando(false); }
+  }
+
+  async function handleIgnorar() {
+    if (!empresaId || ignorando) return;
+    setIgnorando(true);
+    try {
+      await ignorarCliente(empresaId, {
+        id: insight.clienteId,
+        nome: insight.cliente,
+        telefone: insight.telefone,
+      });
+    } catch (e) {
+      console.error("Erro ao ignorar cliente:", e);
+      setIgnorando(false);
+    }
   }
 
   return (
@@ -226,7 +242,7 @@ function InsightCard({ insight, empresaNome, T }) {
           border: "none", cursor: gerando ? "not-allowed" : "pointer",
           letterSpacing: "0.04em", textTransform: "uppercase",
         }}>
-          {gerando ? "Gerando..." : "✦ Gerar mensagem"}
+          {gerando ? "Gerando..." : "\u2726 Gerar mensagem"}
         </button>
         {insight.telefone && (
           <button onClick={() => window.open(`https://wa.me/55${telLimpo}`, "_blank")} style={{
@@ -235,6 +251,21 @@ function InsightCard({ insight, empresaNome, T }) {
             letterSpacing: "0.04em", textTransform: "uppercase",
           }}>WhatsApp</button>
         )}
+        <button
+          onClick={handleIgnorar}
+          disabled={ignorando}
+          title="Ignorar este cliente nos alertas futuros"
+          style={{
+            fontSize: 11, fontWeight: 600, padding: "7px 14px", borderRadius: 6,
+            background: "none", border: `1px solid ${T.border}`,
+            cursor: ignorando ? "not-allowed" : "pointer",
+            color: ignorando ? T.textDim : T.textMid,
+            letterSpacing: "0.04em", textTransform: "uppercase",
+            marginLeft: "auto",
+          }}
+        >
+          {ignorando ? "Ignorando..." : "Ignorar cliente"}
+        </button>
       </div>
 
       {msg && (
@@ -246,12 +277,12 @@ function InsightCard({ insight, empresaNome, T }) {
                 fontSize: 11, fontWeight: 600, padding: "6px 12px", borderRadius: 6,
                 background: T.green, color: "#fff", border: "none", cursor: "pointer",
                 letterSpacing: "0.04em", textTransform: "uppercase",
-              }}>↗ Enviar no WhatsApp</button>
+              }}>\u2197 Enviar no WhatsApp</button>
             )}
             <button onClick={gerarMensagem} style={{
               fontSize: 11, padding: "6px 12px", borderRadius: 6,
               background: "none", border: `1px solid ${T.border}`, cursor: "pointer", color: T.textMid,
-            }}>↺ Regenerar</button>
+            }}>\u21ba Regenerar</button>
           </div>
         </div>
       )}
@@ -509,6 +540,91 @@ function ModalHistoricoCRM({ cliente, vendas, T, onClose }) {
   );
 }
 
+
+// ─── Módulo: Clientes Ignorados ───────────────────────────────────────────────
+function ClientesIgnorados({ ignorados, empresaId, T }) {
+  const [reativando, setReativando] = useState(null);
+
+  async function handleReativar(ig) {
+    setReativando(ig._docId || ig.nome);
+    try {
+      await reativarCliente(empresaId, ig);
+    } catch (e) {
+      console.error("Erro ao reativar cliente:", e);
+    } finally {
+      setReativando(null);
+    }
+  }
+
+  return (
+    <div>
+      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
+        <span style={{ fontSize: 10, fontWeight: 700, color: T.textDim, letterSpacing: "0.12em", textTransform: "uppercase" }}>
+          Clientes ignorados ({ignorados.length})
+        </span>
+        <div style={{ flex: 1, height: 1, background: T.border }} />
+      </div>
+
+      {ignorados.length === 0 ? (
+        <div style={{
+          textAlign: "center", padding: "36px 0", color: T.textDim,
+          fontSize: 13, border: `1px dashed ${T.border}`, borderRadius: 10,
+        }}>
+          Nenhum cliente ignorado. Use o botão "Ignorar cliente" nos alertas do Radar.
+        </div>
+      ) : (
+        ignorados.map((ig) => {
+          const key = ig._docId || ig.nome;
+          const isReativando = reativando === key;
+          return (
+            <div key={key} style={{
+              display: "flex", alignItems: "center", justifyContent: "space-between",
+              gap: 12, padding: "12px 14px", marginBottom: 8,
+              background: T.surface, border: `1px solid ${T.border}`, borderRadius: 8,
+            }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
+                <div style={{
+                  width: 32, height: 32, borderRadius: 6, flexShrink: 0,
+                  background: T.surfaceAlt, color: T.textDim,
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  fontSize: 11, fontWeight: 700,
+                }}>
+                  {(ig.nome || "?").split(" ").slice(0, 2).map(p => p[0]).join("").toUpperCase()}
+                </div>
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{ig.nome}</div>
+                  {ig.telefone && <div style={{ fontSize: 10, color: T.textDim, marginTop: 1 }}>{ig.telefone}</div>}
+                  {ig.ignoradoEm && (
+                    <div style={{ fontSize: 10, color: T.textDim, marginTop: 1 }}>
+                      Ignorado em {ig.ignoradoEm?.toDate
+                        ? ig.ignoradoEm.toDate().toLocaleDateString("pt-BR")
+                        : new Date(ig.ignoradoEm).toLocaleDateString("pt-BR")}
+                    </div>
+                  )}
+                </div>
+              </div>
+              <button
+                onClick={() => handleReativar(ig)}
+                disabled={isReativando}
+                style={{
+                  fontSize: 11, fontWeight: 600, padding: "6px 14px", borderRadius: 6,
+                  background: isReativando ? T.surfaceAlt : "none",
+                  border: `1px solid ${T.border}`,
+                  cursor: isReativando ? "not-allowed" : "pointer",
+                  color: isReativando ? T.textDim : T.green,
+                  letterSpacing: "0.04em", textTransform: "uppercase", flexShrink: 0,
+                }}
+              >
+                {isReativando ? "Reativando..." : "↩ Reativar"}
+              </button>
+            </div>
+          );
+        })
+      )}
+    </div>
+  );
+}
+
 // ─── App Principal ────────────────────────────────────────────────────────────
 export default function App() {
   const [aba, setAba] = useState("radar");
@@ -552,7 +668,7 @@ export default function App() {
     return () => unsub();
   }, []);
 
-  const { clientes, insights, metricas, config, dadosBrutos } = useCRM(usuario?.empresaId);
+  const { clientes, insights, metricas, config, dadosBrutos, ignorados } = useCRM(usuario?.empresaId);
   const leadsData = useLeads(usuario?.empresaId);
 
   const clientesFiltrados = clientes.filter((c) => {
@@ -732,7 +848,7 @@ export default function App() {
               </div>
               {insights.length === 0
                 ? <div style={{ textAlign: "center", padding: "48px 0", color: T.textDim, fontSize: 13, border: `1px dashed ${T.border}`, borderRadius: 10 }}>Nenhum insight gerado ainda.</div>
-                : insights.map((ins) => <InsightCard key={ins.id} insight={ins} empresaNome={config?.empresa?.nomeEmpresa} T={T} />)
+                : insights.map((ins) => <InsightCard key={ins.id} insight={ins} empresaNome={config?.empresa?.nomeEmpresa} empresaId={usuario?.empresaId} T={T} />)
               }
             </>
           )}
@@ -817,12 +933,21 @@ export default function App() {
 
           {/* ── Configurações ── */}
           {aba === "config" && (
-            <ConfigPage
-              T={T}
-              bp={bp}
-              empresaId={usuario?.empresaId}
-              config={config}
-            />
+            <div>
+              <ConfigPage
+                T={T}
+                bp={bp}
+                empresaId={usuario?.empresaId}
+                config={config}
+              />
+              <div style={{ marginTop: 32 }}>
+                <ClientesIgnorados
+                  ignorados={ignorados}
+                  empresaId={usuario?.empresaId}
+                  T={T}
+                />
+              </div>
+            </div>
           )}
 
         </div>
