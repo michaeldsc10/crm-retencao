@@ -2,6 +2,13 @@ import { useState, useEffect } from "react";
 import { doc, collection, onSnapshot } from "firebase/firestore";
 import { db } from "./firebase";
 
+// ─── Utilitário: converte Timestamp Firestore OU string em Date ───────────────
+function toDate(valor) {
+  if (!valor) return null;
+  if (typeof valor.toDate === "function") return valor.toDate(); // Firestore Timestamp
+  return new Date(valor);                                        // string ISO / number
+}
+
 // ─── Score de churn ───────────────────────────────────────────────────────────
 
 function calcularScoreChurn(clientes = [], vendas = []) {
@@ -10,7 +17,8 @@ function calcularScoreChurn(clientes = [], vendas = []) {
   return clientes.map((cliente) => {
     const vendasCliente = vendas
       .filter((v) => v.cliente === cliente.nome)
-      .map((v) => ({ ...v, _data: new Date(v.data) }))
+      .map((v) => ({ ...v, _data: toDate(v.data) }))
+      .filter((v) => v._data instanceof Date && !isNaN(v._data))
       .sort((a, b) => a._data - b._data);
 
     if (vendasCliente.length === 0) {
@@ -36,10 +44,11 @@ function calcularScoreChurn(clientes = [], vendas = []) {
     const totalGasto = vendasCliente.reduce((acc, v) => acc + (v.total || 0), 0);
     const ticketMedio = Math.round(totalGasto / vendasCliente.length);
 
+    // ✅ Campo correto: itens[].nome (não itens[].produto)
     const contagem = {};
     vendasCliente.forEach((v) =>
       (v.itens || []).forEach((i) => {
-        contagem[i.produto] = (contagem[i.produto] || 0) + 1;
+        if (i.nome) contagem[i.nome] = (contagem[i.nome] || 0) + 1;
       })
     );
     const [produtoFavorito] =
@@ -62,7 +71,7 @@ function calcularScoreChurn(clientes = [], vendas = []) {
       ticketMedio,
       produtoFavorito: produtoFavorito || null,
       totalCompras: vendasCliente.length,
-      ultimaCompra: ultima.data,
+      ultimaCompra: ultima._data.toISOString().split("T")[0],
       risco,
       multiplicador: mult ? parseFloat(mult.toFixed(1)) : null,
     };
@@ -95,27 +104,32 @@ function gerarInsights(clientesComScore, vendas = [], servicos = []) {
       });
     }
 
+    // ✅ Upsell: compara por itens[].nome
     const comprados = new Set(
       vendas
         .filter((v) => v.cliente === c.nome)
-        .flatMap((v) => (v.itens || []).map((i) => i.produto))
+        .flatMap((v) => (v.itens || []).map((i) => i.nome).filter(Boolean))
     );
 
+    // Categoria favorita via campo "tipo" do item (ex: "servico", "produto")
+    // ou via subcoleção de serviços se tiver categoria
     const catFav = (() => {
       const cc = {};
       vendas
         .filter((v) => v.cliente === c.nome)
         .forEach((v) =>
           (v.itens || []).forEach((item) => {
-            const srv = servicos.find((s) => s.nome === item.produto);
-            if (srv?.categoria) cc[srv.categoria] = (cc[srv.categoria] || 0) + 1;
+            // Tenta categoria via subcoleção de serviços, senão usa o tipo do item
+            const srv = servicos.find((s) => s.nome === item.nome);
+            const cat = srv?.categoria || item.tipo || null;
+            if (cat) cc[cat] = (cc[cat] || 0) + 1;
           })
         );
       return Object.entries(cc).sort((a, b) => b[1] - a[1])[0]?.[0] || null;
     })();
 
     const naoComprado = servicos.find(
-      (s) => !comprados.has(s.nome) && s.categoria === catFav
+      (s) => !comprados.has(s.nome) && (s.categoria === catFav || s.tipo === catFav)
     );
     if (naoComprado && c.risco === "baixo" && catFav) {
       insights.push({
@@ -152,7 +166,10 @@ function calcularMetricas(clientesComScore, vendas = []) {
       .filter((c) => c.risco === "alto")
       .reduce((a, c) => a + (c.ticketMedio || 0), 0),
     receitaRecente: vendas
-      .filter((v) => new Date(v.data) >= trintaDias)
+      .filter((v) => {
+        const d = toDate(v.data);
+        return d && d >= trintaDias;
+      })
       .reduce((a, v) => a + (v.total || 0), 0),
     ticketGeral: com.length
       ? Math.round(com.reduce((a, c) => a + (c.ticketMedio || 0), 0) / com.length)
@@ -161,16 +178,6 @@ function calcularMetricas(clientesComScore, vendas = []) {
 }
 
 // ─── Hook principal ───────────────────────────────────────────────────────────
-//
-// Estrutura esperada no Firestore (Assent Gestão):
-//
-//   users/{empresaId}                    ← documento raiz (contadores etc.)
-//   users/{empresaId}/clientes/{...}     ← subcoleção de clientes
-//   users/{empresaId}/vendas/{...}       ← subcoleção de vendas
-//   users/{empresaId}/servicos/{...}     ← subcoleção de serviços
-//   users/{empresaId}/config/geral       ← configurações da empresa
-//
-// ─────────────────────────────────────────────────────────────────────────────
 
 export function useCRM(empresaId) {
   const [estado, setEstado] = useState({
@@ -186,7 +193,6 @@ export function useCRM(empresaId) {
   useEffect(() => {
     if (!empresaId) return;
 
-    // Buffer compartilhado entre os listeners
     const buffer = {
       clientes: [],
       vendas: [],
@@ -194,7 +200,6 @@ export function useCRM(empresaId) {
       config: {},
     };
 
-    // Controle de quais listeners já dispararam pelo menos uma vez
     const pronto = {
       clientes: false,
       vendas: false,
@@ -202,9 +207,8 @@ export function useCRM(empresaId) {
       config: false,
     };
 
-    // Só recalcula quando todos os listeners tiverem carregado
     function recalcular() {
-      if (!pronto.clientes || !pronto.vendas || !pronto.servicos || !pronto.config) return;
+      if (!Object.values(pronto).every(Boolean)) return;
 
       const clientesComScore = calcularScoreChurn(buffer.clientes, buffer.vendas);
       const insights = gerarInsights(clientesComScore, buffer.vendas, buffer.servicos);
@@ -221,20 +225,9 @@ export function useCRM(empresaId) {
       });
     }
 
-    function onErro(secao) {
-      return (err) => {
-        console.error(`[useCRM] Erro em "${secao}":`, err);
-        setEstado((s) => ({
-          ...s,
-          carregando: false,
-          erro: `Erro ao carregar ${secao}.`,
-        }));
-      };
-    }
-
     const unsubs = [];
 
-    // 1. Subcoleção: clientes
+    // 1. clientes
     unsubs.push(
       onSnapshot(
         collection(db, "users", empresaId, "clientes"),
@@ -243,11 +236,14 @@ export function useCRM(empresaId) {
           pronto.clientes = true;
           recalcular();
         },
-        onErro("clientes")
+        (err) => {
+          console.error("[useCRM] clientes:", err.code, err.message);
+          setEstado((s) => ({ ...s, carregando: false, erro: "Erro ao carregar clientes." }));
+        }
       )
     );
 
-    // 2. Subcoleção: vendas
+    // 2. vendas
     unsubs.push(
       onSnapshot(
         collection(db, "users", empresaId, "vendas"),
@@ -256,11 +252,15 @@ export function useCRM(empresaId) {
           pronto.vendas = true;
           recalcular();
         },
-        onErro("vendas")
+        (err) => {
+          console.error("[useCRM] vendas:", err.code, err.message);
+          pronto.vendas = true;
+          recalcular();
+        }
       )
     );
 
-    // 3. Subcoleção: servicos
+    // 3. servicos
     unsubs.push(
       onSnapshot(
         collection(db, "users", empresaId, "servicos"),
@@ -269,11 +269,15 @@ export function useCRM(empresaId) {
           pronto.servicos = true;
           recalcular();
         },
-        onErro("serviços")
+        (err) => {
+          console.error("[useCRM] serviços:", err.code, err.message);
+          pronto.servicos = true;
+          recalcular();
+        }
       )
     );
 
-    // 4. Documento de config (users/{id}/config/geral)
+    // 4. config/geral
     unsubs.push(
       onSnapshot(
         doc(db, "users", empresaId, "config", "geral"),
@@ -283,8 +287,7 @@ export function useCRM(empresaId) {
           recalcular();
         },
         (err) => {
-          // Config não é crítica: marca como pronto mesmo sem dados
-          console.warn("[useCRM] Config não encontrada:", err);
+          console.warn("[useCRM] config:", err.code, err.message);
           pronto.config = true;
           recalcular();
         }
@@ -298,10 +301,6 @@ export function useCRM(empresaId) {
 }
 
 // ─── Gerador de prompt para IA ────────────────────────────────────────────────
-//
-// Acesse o nome da empresa via: config?.empresa?.nomeEmpresa
-//
-// ─────────────────────────────────────────────────────────────────────────────
 
 export function montarPromptMensagem(insight, empresaNome) {
   const empresa = empresaNome || "nossa agência";
@@ -317,10 +316,10 @@ export function montarPromptMensagem(insight, empresaNome) {
 
   let user = "";
   if (insight.tipo === "risco") {
-    user = `Cliente: ${insight.cliente}. Serviço: ${insight.produtoFavorito || "nossos serviços"}. Ausente há ${insight.diasAusente} dias. 
+    user = `Cliente: ${insight.cliente}. Serviço favorito: ${insight.produtoFavorito || "nossos serviços"}. Ausente há ${insight.diasAusente} dias. 
     Escreva um oi rápido, dizendo que lembrou dele ao organizar a agenda e pergunte como estão os planos dessa semana.`;
   } else if (insight.tipo === "oportunidade") {
-    user = `Cliente: ${insight.cliente}. Já faz ${insight.produtoFavorito}, mas nunca usou "${insight.servico}". 
+    user = `Cliente: ${insight.cliente}. Já comprou "${insight.produtoFavorito || "nossos produtos"}", mas nunca usou "${insight.servico}". 
     Sugira esse novo serviço como algo que pode escalar os resultados que ele já tem.`;
   }
 
