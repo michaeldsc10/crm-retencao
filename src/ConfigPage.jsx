@@ -349,14 +349,24 @@ export default function ConfigPage({ T, bp, empresaId, config }) {
 
   async function salvarRadar() {
     if (!empresaId || salvandoRadar) return;
+
+    // Validação: ordem dos limiares
+    if (radarForm.diasMedio >= radarForm.diasAlto) {
+      setFeedbackRadar("erro_ordem_dias");
+      return;
+    }
+    if (radarForm.multMedio >= radarForm.multAlto) {
+      setFeedbackRadar("erro_ordem_mult");
+      return;
+    }
+
     setSalvandoRadar(true);
     setFeedbackRadar(null);
     try {
-      // Garante que diasMedio < diasAlto e multMedio < multAlto
       const payload = {
-        diasMedio: Math.min(radarForm.diasMedio, radarForm.diasAlto - 1),
+        diasMedio: radarForm.diasMedio,
         diasAlto:  radarForm.diasAlto,
-        multMedio: Math.min(radarForm.multMedio, radarForm.multAlto - 0.1),
+        multMedio: radarForm.multMedio,
         multAlto:  radarForm.multAlto,
       };
       await setDoc(doc(db, "dadosCRM", empresaId, "radar", "risco"), payload, { merge: true });
@@ -471,9 +481,9 @@ export default function ConfigPage({ T, bp, empresaId, config }) {
                   </label>
                   <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                     <input
-                      type="number" min={1} max={radarForm.diasAlto - 1}
+                      type="number" min={1} step={1}
                       value={radarForm.diasMedio}
-                      onChange={e => setRadarForm(f => ({ ...f, diasMedio: Math.max(1, parseInt(e.target.value) || 1) }))}
+                      onChange={e => setRadarForm(f => ({ ...f, diasMedio: parseInt(e.target.value) || 0 }))}
                       style={{
                         width: 72, padding: "7px 10px", borderRadius: 6, textAlign: "center",
                         border: `1px solid ${T.border}`, background: T.bg,
@@ -492,9 +502,9 @@ export default function ConfigPage({ T, bp, empresaId, config }) {
                   </label>
                   <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                     <input
-                      type="number" min={radarForm.diasMedio + 1}
+                      type="number" min={1} step={1}
                       value={radarForm.diasAlto}
-                      onChange={e => setRadarForm(f => ({ ...f, diasAlto: Math.max(f.diasMedio + 1, parseInt(e.target.value) || f.diasMedio + 1) }))}
+                      onChange={e => setRadarForm(f => ({ ...f, diasAlto: parseInt(e.target.value) || 0 }))}
                       style={{
                         width: 72, padding: "7px 10px", borderRadius: 6, textAlign: "center",
                         border: `1px solid ${T.border}`, background: T.bg,
@@ -529,9 +539,9 @@ export default function ConfigPage({ T, bp, empresaId, config }) {
                   </label>
                   <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                     <input
-                      type="number" min={0.1} max={radarForm.multAlto - 0.1} step={0.1}
+                      type="number" min={0.1} step={0.1}
                       value={radarForm.multMedio}
-                      onChange={e => setRadarForm(f => ({ ...f, multMedio: Math.max(0.1, parseFloat(e.target.value) || 0.1) }))}
+                      onChange={e => setRadarForm(f => ({ ...f, multMedio: parseFloat(e.target.value) || 0 }))}
                       style={{
                         width: 72, padding: "7px 10px", borderRadius: 6, textAlign: "center",
                         border: `1px solid ${T.border}`, background: T.bg,
@@ -550,9 +560,9 @@ export default function ConfigPage({ T, bp, empresaId, config }) {
                   </label>
                   <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                     <input
-                      type="number" min={radarForm.multMedio + 0.1} step={0.1}
+                      type="number" min={0.1} step={0.1}
                       value={radarForm.multAlto}
-                      onChange={e => setRadarForm(f => ({ ...f, multAlto: Math.max(f.multMedio + 0.1, parseFloat(e.target.value) || f.multMedio + 0.1) }))}
+                      onChange={e => setRadarForm(f => ({ ...f, multAlto: parseFloat(e.target.value) || 0 }))}
                       style={{
                         width: 72, padding: "7px 10px", borderRadius: 6, textAlign: "center",
                         border: `1px solid ${T.border}`, background: T.bg,
@@ -597,6 +607,12 @@ export default function ConfigPage({ T, bp, empresaId, config }) {
               )}
               {feedbackRadar === "erro" && (
                 <span style={{ fontSize: 12, color: T.red }}>Erro ao salvar. Tente novamente.</span>
+              )}
+              {feedbackRadar === "erro_ordem_dias" && (
+                <span style={{ fontSize: 12, color: T.red }}>⚠ "Risco alto" deve ser maior que "Atenção" (dias).</span>
+              )}
+              {feedbackRadar === "erro_ordem_mult" && (
+                <span style={{ fontSize: 12, color: T.red }}>⚠ "Risco alto" deve ser maior que "Atenção" (multiplicador).</span>
               )}
             </div>
           </>
