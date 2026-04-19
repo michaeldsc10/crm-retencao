@@ -11,7 +11,7 @@
 // Separado de dados/{empresaId} que pertence ao Assent Gestão (clientes, vendas, serviços).
 
 import { useState, useEffect } from "react";
-import { doc, onSnapshot, updateDoc, setDoc, arrayUnion, arrayRemove, getDoc } from "firebase/firestore";
+import { doc, onSnapshot, updateDoc, setDoc, arrayUnion, arrayRemove, getDoc, arrayRemove } from "firebase/firestore";
 import { db } from "./firebase";
 
 // ─── Scoring de leads (qualificação por engajamento) ─────────────────────────
@@ -25,6 +25,14 @@ const PONTOS = {
   multiplas_paginas: 10, // 3+ page views
 };
 
+export async function removerEventoLead(empresaId, lead, eventoId) {
+  const leadRef = doc(db, "empresas", empresaId, "leads", lead.id);
+  const evento = (lead.eventos || []).find(e => e.id === eventoId);
+  if (!evento) return;
+  await updateDoc(leadRef, {
+    eventos: arrayRemove(evento),
+  });
+}
 function calcularScoreLead(lead) {
   const eventos = lead.eventos || [];
   let score = 0;
