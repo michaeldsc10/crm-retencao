@@ -219,7 +219,7 @@ function calcularMetricas(clientesComScore, vendas = []) {
     fieis: com.filter((c) => c.risco === "baixo" && c.totalCompras >= 2).length,
     novos: com.filter((c) => c.totalCompras === 1).length,
     receitaEmRisco: com
-      .filter((c) => c.risco === "alto")
+      .filter((c) => c.risco === "alto" || c.risco === "medio")
       .reduce((a, c) => a + (c.ticketMedio || 0), 0),
     receitaRecente: vendas
       .filter((v) => toDate(v.data) >= trintaDias)
