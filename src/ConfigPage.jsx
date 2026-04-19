@@ -570,7 +570,8 @@ export default function ConfigPage({ T, bp, empresaId, config }) {
   };
 
   const TAB_LABELS = { html: "HTML puro", react: "React", api: "cURL / API" };
- return (
+
+  return (
     <div style={{ maxWidth: 720 }}>
 
       {/* ── Seção: Configurar Radar ── */}
@@ -738,8 +739,6 @@ export default function ConfigPage({ T, bp, empresaId, config }) {
           </>
         )}
       </div>
-
- 
 
       {/* ── Seção: Seu link de captura ── */}
       <div style={{
