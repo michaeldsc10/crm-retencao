@@ -9,6 +9,7 @@ import {
   adicionarLead,
   atualizarStatusLead,
   registrarEventoLead,
+  removerEventoLead,
   salvarAutomacao,
   removerAutomacao,
   removerLead,
@@ -250,6 +251,8 @@ function DetalheLeadPanel({ lead, empresaId, empresaNome, T, onFechar }) {
   const [novoEvento, setNovoEvento] = useState("");
   const [confirmandoExclusao, setConfirmandoExclusao] = useState(false);
   const [excluindo, setExcluindo] = useState(false);
+  const [excluindoEventoId, setExcluindoEventoId] = useState(null);
+  const [hoveredEventoId, setHoveredEventoId] = useState(null);
 
   const telLimpo = (lead.telefone || "").replace(/\D/g, "");
 
@@ -288,6 +291,15 @@ function DetalheLeadPanel({ lead, empresaId, empresaNome, T, onFechar }) {
       descricao: novoEvento.trim(),
     });
     setNovoEvento("");
+  }
+
+  async function excluirEvento(eventoId) {
+    setExcluindoEventoId(eventoId);
+    try {
+      await removerEventoLead(empresaId, lead, eventoId);
+    } finally {
+      setExcluindoEventoId(null);
+    }
   }
 
   async function gerarMensagem() {
@@ -505,7 +517,12 @@ function DetalheLeadPanel({ lead, empresaId, empresaNome, T, onFechar }) {
               width: 1, background: T.border,
             }} />
             {(lead.eventos || []).slice().reverse().map((ev, i) => (
-              <div key={ev.id || i} style={{ display: "flex", gap: 12, marginBottom: 12, position: "relative" }}>
+              <div
+                key={ev.id || i}
+                style={{ display: "flex", gap: 12, marginBottom: 12, position: "relative" }}
+                onMouseEnter={() => setHoveredEventoId(ev.id || i)}
+                onMouseLeave={() => setHoveredEventoId(null)}
+              >
                 <div style={{
                   width: 28, height: 28, borderRadius: "50%", flexShrink: 0,
                   background: T.surfaceAlt, border: `1px solid ${T.border}`,
@@ -515,12 +532,36 @@ function DetalheLeadPanel({ lead, empresaId, empresaNome, T, onFechar }) {
                   {EVENTO_ICONES[ev.tipo] || "●"}
                 </div>
                 <div style={{ flex: 1, paddingTop: 3 }}>
-                  <div style={{ display: "flex", justifyContent: "space-between" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 6 }}>
                     <span style={{ fontSize: 11, fontWeight: 600, color: T.text }}>
                       {{ form_submit:"Formulário enviado", page_view:"Página visitada", email_aberto:"Email aberto",
                          email_clicado:"Clicou em email", anotacao:"Anotação" }[ev.tipo] || ev.tipo}
                     </span>
-                    <span style={{ fontSize: 10, color: T.textDim }}>{fmtRelativo(ev.criadoEm)}</span>
+                    <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
+                      <span style={{ fontSize: 10, color: T.textDim }}>{fmtRelativo(ev.criadoEm)}</span>
+                      {ev.tipo === "anotacao" && ev.id && (
+                        <button
+                          onClick={() => excluirEvento(ev.id)}
+                          disabled={excluindoEventoId === ev.id}
+                          title="Excluir anotação"
+                          style={{
+                            background: "none",
+                            border: `1px solid ${T.red}55`,
+                            color: excluindoEventoId === ev.id ? T.textDim : T.red,
+                            borderRadius: 4,
+                            width: 20, height: 20,
+                            display: "flex", alignItems: "center", justifyContent: "center",
+                            cursor: excluindoEventoId === ev.id ? "not-allowed" : "pointer",
+                            fontSize: 10, lineHeight: 1, padding: 0,
+                            opacity: hoveredEventoId === (ev.id || i) ? 1 : 0,
+                            transition: "opacity 0.15s",
+                            flexShrink: 0,
+                          }}
+                        >
+                          {excluindoEventoId === ev.id ? "…" : "✕"}
+                        </button>
+                      )}
+                    </div>
                   </div>
                   {ev.url && <div style={{ fontSize: 10, color: T.textDim, marginTop: 1 }}>{ev.url.replace(/https?:\/\/[^/]+/, "")}</div>}
                   {ev.descricao && <div style={{ fontSize: 11, color: T.textMid, marginTop: 2 }}>{ev.descricao}</div>}
