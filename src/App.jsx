@@ -199,11 +199,15 @@ function InsightCard({ insight, empresaNome, empresaId, T }) {
   const [ignorando, setIgnorando] = useState(false);
 
   const cores = {
-    risco:       { borda: T.red,    badgeBg: T.redDim,    badgeColor: T.red,    border: T.redBorder,    label: "Risco de perda" },
-    oportunidade:{ borda: T.blue,   badgeBg: T.blueDim,   badgeColor: T.blue,   border: T.blueBorder,   label: "Oportunidade"   },
-    fidelizacao: { borda: T.green,  badgeBg: T.greenDim,  badgeColor: T.green,  border: T.greenBorder,  label: "Fidelização"    },
+    risco_alto:   { borda: T.red,    badgeBg: T.redDim,    badgeColor: T.red,    border: T.redBorder,    label: "Risco de perda" },
+    risco_medio:  { borda: T.yellow, badgeBg: T.yellowDim, badgeColor: T.yellow, border: T.yellowBorder, label: "Atenção"        },
+    oportunidade: { borda: T.blue,   badgeBg: T.blueDim,   badgeColor: T.blue,   border: T.blueBorder,   label: "Oportunidade"   },
+    fidelizacao:  { borda: T.green,  badgeBg: T.greenDim,  badgeColor: T.green,  border: T.greenBorder,  label: "Fidelização"    },
   };
-  const cor = cores[insight.tipo] || cores.risco;
+  const tipoKey = insight.tipo === "risco"
+    ? (insight.prioridade === 1 ? "risco_alto" : "risco_medio")
+    : insight.tipo;
+  const cor = cores[tipoKey] || cores.risco_alto;
   const telLimpo = (insight.telefone || "").replace(/\D/g, "");
 
   async function gerarMensagem() {
@@ -243,7 +247,7 @@ function InsightCard({ insight, empresaNome, empresaId, T }) {
           width: 3, flexShrink: 0,
           background: cor.borda,
           borderRadius: "16px 0 0 16px",
-          boxShadow: insight.tipo === "risco" ? `0 0 12px ${T.red}` : "none",
+          boxShadow: tipoKey === "risco_alto" ? `0 0 12px ${T.red}` : tipoKey === "risco_medio" ? `0 0 8px ${T.yellow}` : "none",
         }} />
         <div style={{ flex: 1, padding: "16px 16px 16px 14px" }}>
           <div style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
@@ -279,7 +283,7 @@ function InsightCard({ insight, empresaNome, empresaId, T }) {
               <div style={{ display: "flex", gap: 14, marginTop: 8, flexWrap: "wrap" }}>
                 {insight.diasAusente != null && (
                   <span style={{ fontSize: 11, color: T.textDim, fontFamily: FONT }}>
-                    ausente há <strong style={{ color: insight.diasAusente > 30 ? T.red : T.textMid, fontWeight: 600 }}>{insight.diasAusente}d</strong>
+                    ausente há <strong style={{ color: insight.prioridade === 1 ? T.red : T.yellow, fontWeight: 600 }}>{insight.diasAusente}d</strong>
                   </span>
                 )}
                 {insight.ticketMedio != null && (
